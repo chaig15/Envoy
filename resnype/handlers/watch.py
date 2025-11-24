@@ -1,6 +1,6 @@
 """Watch management handlers for /watch and /watches commands."""
 
-from datetime import datetime, date, time
+from datetime import datetime, date
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     ContextTypes,

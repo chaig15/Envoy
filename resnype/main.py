@@ -1,6 +1,5 @@
 """Main entry point for the Resnype Telegram bot."""
 
-import asyncio
 import logging
 from telegram import Update, BotCommand
 from telegram.ext import Application, CommandHandler, ContextTypes
@@ -40,7 +39,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "/search `<restaurant>` - Find restaurants\n"
         "/watches - View your active watches\n"
         "/help - Show this message",
-        parse_mode="Markdown"
+        parse_mode="Markdown",
     )
 
 
@@ -59,7 +58,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         "• Set watches for dates 1-2 weeks out\n"
         "• Popular spots release cancellations throughout the day\n"
         "• Book quickly when you get an alert!",
-        parse_mode="Markdown"
+        parse_mode="Markdown",
     )
 
 
@@ -68,7 +67,7 @@ async def post_init(application: Application) -> None:
     # Connect to database
     await Database.connect()
     logger.info("Database connected")
-    
+
     # Set bot commands for the menu
     commands = [
         BotCommand("start", "Welcome message"),
@@ -79,7 +78,7 @@ async def post_init(application: Application) -> None:
         BotCommand("help", "Show help message"),
     ]
     await application.bot.set_my_commands(commands)
-    
+
     # Start availability monitor
     monitor = AvailabilityMonitor(application.bot)
     application.bot_data["monitor"] = monitor
@@ -93,7 +92,7 @@ async def post_shutdown(application: Application) -> None:
     monitor = application.bot_data.get("monitor")
     if monitor:
         monitor.stop()
-    
+
     # Disconnect database
     await Database.disconnect()
     logger.info("Shutdown complete")
@@ -102,7 +101,7 @@ async def post_shutdown(application: Application) -> None:
 def main() -> None:
     """Start the bot."""
     settings = get_settings()
-    
+
     # Build application
     application = (
         Application.builder()
@@ -111,16 +110,16 @@ def main() -> None:
         .post_shutdown(post_shutdown)
         .build()
     )
-    
+
     # Register handlers
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", help_command))
-    
+
     setup_auth_handlers(application)
     setup_search_handlers(application)
     setup_watch_handlers(application)
     setup_booking_handlers(application)
-    
+
     # Run the bot
     logger.info("Starting Resnype bot...")
     application.run_polling(allowed_updates=Update.ALL_TYPES)
@@ -128,4 +127,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

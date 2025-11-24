@@ -74,7 +74,7 @@ async def search(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         
     except ResyError as e:
         await status_msg.edit_text(f"❌ Search failed: {e.message}")
-    except Exception as e:
+    except Exception:
         await status_msg.edit_text("❌ Something went wrong. Please try again.")
 
 

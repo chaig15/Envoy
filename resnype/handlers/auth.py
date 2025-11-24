@@ -9,11 +9,10 @@ from telegram.ext import (
     filters,
 )
 
-from resnype.db import Database
 from resnype.db.queries import UserQueries
 from resnype.resy import ResyClient
 from resnype.resy.client import ResyError
-from resnype.encryption import encrypt_token, decrypt_token
+from resnype.encryption import encrypt_token
 
 
 # Conversation states
@@ -104,7 +103,7 @@ async def login_password(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             f"❌ Login failed: {e.message}\n\n"
             "Please check your credentials and try /login again."
         )
-    except Exception as e:
+    except Exception:
         await status_msg.edit_text(
             "❌ Something went wrong. Please try /login again."
         )

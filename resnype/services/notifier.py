@@ -29,11 +29,11 @@ class Notifier:
         
         # Format the message
         text_parts = [
-            f"🚨 **Table Available!**\n",
+            "🚨 **Table Available!**\n",
             f"🍽 **{watch.venue_name}**",
             f"📅 {watch.date.strftime('%A, %B %d')}",
             f"👥 {watch.party_size} guests\n",
-            f"**Available times:**",
+            "**Available times:**",
         ]
         
         # Show up to 5 slots
