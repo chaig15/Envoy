@@ -1,16 +1,24 @@
 """Resy API client for authentication, search, availability, and booking."""
 
+import json
 import aiohttp
 from typing import Optional
 from datetime import date
 
 from resnype.config import get_settings
-from .models import ResyAuth, Venue, TimeSlot, Availability, BookingDetails, BookingResult
+from .models import (
+    ResyAuth,
+    Venue,
+    TimeSlot,
+    Availability,
+    BookingDetails,
+    BookingResult,
+)
 
 
 class ResyError(Exception):
     """Error from Resy API."""
-    
+
     def __init__(self, message: str, status_code: Optional[int] = None):
         self.message = message
         self.status_code = status_code
@@ -19,19 +27,19 @@ class ResyError(Exception):
 
 class ResyClient:
     """Async client for Resy API."""
-    
+
     # Resy API requires these headers
     API_KEY = "VbWk7s3L4KiK5fzlO7JD3Q5EYolJI7n5"  # Public API key used by resy.com
-    
+
     def __init__(self, auth_token: Optional[str] = None):
         self.auth_token = auth_token
         self.settings = get_settings()
         self._session: Optional[aiohttp.ClientSession] = None
-    
+
     @property
     def base_url(self) -> str:
         return self.settings.resy_api_base
-    
+
     def _get_headers(self) -> dict:
         """Get headers for API requests."""
         headers = {
@@ -43,18 +51,18 @@ class ResyClient:
         if self.auth_token:
             headers["X-Resy-Auth-Token"] = self.auth_token
         return headers
-    
+
     async def _get_session(self) -> aiohttp.ClientSession:
         """Get or create aiohttp session."""
         if self._session is None or self._session.closed:
             self._session = aiohttp.ClientSession()
         return self._session
-    
+
     async def close(self) -> None:
         """Close the HTTP session."""
         if self._session and not self._session.closed:
             await self._session.close()
-    
+
     async def _request(
         self,
         method: str,
@@ -65,7 +73,7 @@ class ResyClient:
         """Make an API request."""
         session = await self._get_session()
         url = f"{self.base_url}{endpoint}"
-        
+
         async with session.request(
             method,
             url,
@@ -80,11 +88,11 @@ class ResyClient:
             if response.status >= 400:
                 text = await response.text()
                 raise ResyError(f"API error: {text}", response.status)
-            
+
             return await response.json()
-    
+
     # ============ Authentication ============
-    
+
     async def login(self, email: str, password: str) -> ResyAuth:
         """
         Authenticate with Resy using email and password.
@@ -94,42 +102,44 @@ class ResyClient:
             "email": email,
             "password": password,
         }
-        
+
         result = await self._request("POST", "/3/auth/password", data=data)
-        
+
         # Extract payment method if available
         payment_method_id = None
         if "payment_method_id" in result:
             payment_method_id = str(result["payment_method_id"])
         elif "payment_methods" in result and result["payment_methods"]:
             payment_method_id = str(result["payment_methods"][0].get("id"))
-        
+
         return ResyAuth(
             token=result["token"],
             payment_method_id=payment_method_id,
             first_name=result.get("first_name"),
             last_name=result.get("last_name"),
         )
-    
+
     # ============ Search ============
-    
+
     async def search_venues(self, query: str, location: str = "ny") -> list[Venue]:
         """
         Search for venues by name.
-        
+
         Args:
             query: Search term
-            location: City code (ny, la, chi, sf, etc.)
+            location: City code (ny, la, chi, sf, etc.) - currently not used as API doesn't accept geo param
         """
-        params = {
+        # The search endpoint requires POST with struct_data parameter
+        struct_data = {
             "query": query,
-            "geo": f'{{"name":"{location}"}}',
             "per_page": 10,
             "page": 1,
         }
-        
-        result = await self._request("GET", "/3/venuesearch/search", params=params)
-        
+
+        data = {"struct_data": json.dumps(struct_data)}
+
+        result = await self._request("POST", "/3/venuesearch/search", data=data)
+
         venues = []
         for hit in result.get("search", {}).get("hits", []):
             try:
@@ -138,17 +148,19 @@ class ResyClient:
                     name=hit["name"],
                     location=hit.get("location"),
                     price_range=hit.get("price_range"),
-                    cuisine=hit.get("cuisine", [None])[0] if hit.get("cuisine") else None,
+                    cuisine=hit.get("cuisine", [None])[0]
+                    if hit.get("cuisine")
+                    else None,
                     rating=hit.get("rating"),
                 )
                 venues.append(venue)
             except (KeyError, IndexError):
                 continue
-        
+
         return venues
-    
+
     # ============ Availability ============
-    
+
     async def get_availability(
         self,
         venue_id: int,
@@ -157,7 +169,7 @@ class ResyClient:
     ) -> Availability:
         """
         Get available time slots for a venue.
-        
+
         Args:
             venue_id: Resy venue ID
             check_date: Date to check
@@ -170,32 +182,32 @@ class ResyClient:
             "lat": 0,
             "long": 0,
         }
-        
+
         result = await self._request("GET", "/4/find", params=params)
-        
+
         slots = []
         venue_name = ""
-        
+
         # Parse the response - structure varies
         results = result.get("results", {})
         venues = results.get("venues", [])
-        
+
         if venues:
             venue_data = venues[0]
             venue_info = venue_data.get("venue", {})
             venue_name = venue_info.get("name", "")
-            
+
             for slot_data in venue_data.get("slots", []):
                 config = slot_data.get("config", {})
                 date_info = slot_data.get("date", {})
-                
+
                 slot = TimeSlot(
                     config_id=config.get("token", ""),
                     time=date_info.get("start", ""),
                     type=config.get("type", ""),
                 )
                 slots.append(slot)
-        
+
         return Availability(
             venue_id=venue_id,
             venue_name=venue_name,
@@ -203,10 +215,12 @@ class ResyClient:
             party_size=party_size,
             slots=slots,
         )
-    
+
     # ============ Booking ============
-    
-    async def get_booking_details(self, config_token: str, party_size: int, check_date: date) -> BookingDetails:
+
+    async def get_booking_details(
+        self, config_token: str, party_size: int, check_date: date
+    ) -> BookingDetails:
         """
         Get booking details/token needed to complete a reservation.
         This is the step before actually booking.
@@ -216,11 +230,11 @@ class ResyClient:
             "party_size": party_size,
             "day": check_date.isoformat(),
         }
-        
+
         result = await self._request("GET", "/3/details", params=params)
-        
+
         book_token = result.get("book_token", {}).get("value", "")
-        
+
         return BookingDetails(
             book_token=book_token,
             config_id=config_token,
@@ -228,7 +242,7 @@ class ResyClient:
             party_size=party_size,
             venue_id=result.get("venue", {}).get("id", 0),
         )
-    
+
     async def book(
         self,
         book_token: str,
@@ -236,7 +250,7 @@ class ResyClient:
     ) -> BookingResult:
         """
         Complete a booking.
-        
+
         Args:
             book_token: Token from get_booking_details
             payment_method_id: Payment method ID from user's account
@@ -244,15 +258,15 @@ class ResyClient:
         data = {
             "book_token": book_token,
         }
-        
+
         if payment_method_id:
             data["struct_payment_method"] = f'{{"id":{payment_method_id}}}'
-        
+
         try:
             result = await self._request("POST", "/3/book", data=data)
-            
+
             reservation = result.get("reservation", {})
-            
+
             return BookingResult(
                 success=True,
                 reservation_id=str(result.get("reservation_id", "")),
@@ -267,7 +281,7 @@ class ResyClient:
                 success=False,
                 error_message=e.message,
             )
-    
+
     async def quick_book(
         self,
         config_token: str,
@@ -280,13 +294,12 @@ class ResyClient:
         """
         # Get the book token
         details = await self.get_booking_details(config_token, party_size, check_date)
-        
+
         if not details.book_token:
             return BookingResult(
                 success=False,
                 error_message="Could not get booking token. Slot may no longer be available.",
             )
-        
+
         # Complete the booking
         return await self.book(details.book_token, payment_method_id)
-
