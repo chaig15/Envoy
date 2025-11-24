@@ -9,11 +9,11 @@ from telegram.ext import (
     filters,
 )
 
-from bot.db import Database
-from bot.db.queries import UserQueries
-from bot.resy import ResyClient
-from bot.resy.client import ResyError
-from bot.encryption import encrypt_token, decrypt_token
+from resnype.db import Database
+from resnype.db.queries import UserQueries
+from resnype.resy import ResyClient
+from resnype.resy.client import ResyError
+from resnype.encryption import encrypt_token, decrypt_token
 
 
 # Conversation states

@@ -4,10 +4,10 @@ from datetime import datetime
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, CallbackQueryHandler
 
-from bot.db.queries import UserQueries, WatchQueries
-from bot.resy import ResyClient
-from bot.resy.client import ResyError
-from bot.encryption import decrypt_token
+from resnype.db.queries import UserQueries, WatchQueries
+from resnype.resy import ResyClient
+from resnype.resy.client import ResyError
+from resnype.encryption import decrypt_token
 
 
 async def book_slot(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

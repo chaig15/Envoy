@@ -11,7 +11,7 @@ from telegram.ext import (
     filters,
 )
 
-from bot.db.queries import UserQueries, WatchQueries
+from resnype.db.queries import UserQueries, WatchQueries
 
 
 # Conversation states for watch creation

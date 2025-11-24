@@ -4,7 +4,7 @@ import aiohttp
 from typing import Optional
 from datetime import date
 
-from bot.config import get_settings
+from resnype.config import get_settings
 from .models import ResyAuth, Venue, TimeSlot, Availability, BookingDetails, BookingResult
 
 

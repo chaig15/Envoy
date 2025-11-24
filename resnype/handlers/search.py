@@ -3,10 +3,10 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, CommandHandler, CallbackQueryHandler
 
-from bot.db.queries import UserQueries
-from bot.resy import ResyClient
-from bot.resy.client import ResyError
-from bot.encryption import decrypt_token
+from resnype.db.queries import UserQueries
+from resnype.resy import ResyClient
+from resnype.resy.client import ResyError
+from resnype.encryption import decrypt_token
 
 
 async def search(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

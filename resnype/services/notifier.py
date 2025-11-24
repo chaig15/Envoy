@@ -2,8 +2,8 @@
 
 from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup
 
-from bot.db.models import Watch
-from bot.resy.models import TimeSlot
+from resnype.db.models import Watch
+from resnype.resy.models import TimeSlot
 
 
 class Notifier:

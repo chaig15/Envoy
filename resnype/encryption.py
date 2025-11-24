@@ -2,7 +2,7 @@
 
 from cryptography.fernet import Fernet
 
-from bot.config import get_settings
+from resnype.config import get_settings
 
 
 def get_fernet() -> Fernet:

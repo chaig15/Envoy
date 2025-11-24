@@ -5,15 +5,15 @@ import logging
 from telegram import Update, BotCommand
 from telegram.ext import Application, CommandHandler, ContextTypes
 
-from bot.config import get_settings
-from bot.db import Database
-from bot.handlers import (
+from resnype.config import get_settings
+from resnype.db import Database
+from resnype.handlers import (
     setup_auth_handlers,
     setup_search_handlers,
     setup_watch_handlers,
     setup_booking_handlers,
 )
-from bot.services import AvailabilityMonitor
+from resnype.services import AvailabilityMonitor
 
 
 # Configure logging

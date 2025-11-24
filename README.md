@@ -67,14 +67,14 @@ docker-compose up -d
 uv sync
 
 # Run locally (needs PostgreSQL)
-uv run python -m bot.main
+uv run python -m resnype.main
 ```
 
 ### Project Structure
 
 ```
 resnype/
-├── bot/
+├── resnype/
 │   ├── main.py           # Entry point
 │   ├── config.py         # Settings
 │   ├── handlers/         # Telegram command handlers
