@@ -89,4 +89,3 @@ resnype/
 ## License
 
 MIT
-
