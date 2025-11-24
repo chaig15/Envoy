@@ -1,0 +1,69 @@
+"""Notification service for sending availability alerts."""
+
+from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup
+
+from bot.db.models import Watch
+from bot.resy.models import TimeSlot
+
+
+class Notifier:
+    """Handles sending availability notifications to users."""
+    
+    def __init__(self, bot: Bot):
+        self.bot = bot
+    
+    async def send_availability_alert(
+        self,
+        watch: Watch,
+        slots: list[TimeSlot],
+    ) -> None:
+        """
+        Send an availability alert with one-click booking buttons.
+        
+        Args:
+            watch: The watch that matched
+            slots: Available time slots
+        """
+        if not slots:
+            return
+        
+        # Format the message
+        text_parts = [
+            f"🚨 **Table Available!**\n",
+            f"🍽 **{watch.venue_name}**",
+            f"📅 {watch.date.strftime('%A, %B %d')}",
+            f"👥 {watch.party_size} guests\n",
+            f"**Available times:**",
+        ]
+        
+        # Show up to 5 slots
+        for slot in slots[:5]:
+            slot_type = f" ({slot.type})" if slot.type else ""
+            text_parts.append(f"• {slot.time_display}{slot_type}")
+        
+        if len(slots) > 5:
+            text_parts.append(f"_...and {len(slots) - 5} more_")
+        
+        # Create booking buttons for each slot
+        keyboard = []
+        for slot in slots[:4]:  # Max 4 buttons
+            keyboard.append([
+                InlineKeyboardButton(
+                    f"📍 Book {slot.time_display}",
+                    callback_data=f"book:{watch.id}:{slot.config_token}:{watch.date.isoformat()}"
+                )
+            ])
+        
+        # Add dismiss button
+        keyboard.append([
+            InlineKeyboardButton("✖️ Dismiss", callback_data=f"dismiss:{watch.id}")
+        ])
+        
+        # Send the notification
+        await self.bot.send_message(
+            chat_id=watch.telegram_id,
+            text="\n".join(text_parts),
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+        )
+
