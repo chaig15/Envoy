@@ -10,6 +10,7 @@ import aiohttp
 from resnype.config import get_settings
 from .models import (
     ResyAuth,
+    ResyChallenge,
     Venue,
     TimeSlot,
     Availability,
@@ -131,7 +132,9 @@ class ResyClient:
         await self._request("POST", "/3/auth/mobile", data=data, use_json=False)
         return True
 
-    async def verify_sms_code(self, phone_number: str, code: str) -> ResyAuth:
+    async def verify_sms_code(
+        self, phone_number: str, code: str
+    ) -> ResyAuth | ResyChallenge:
         """
         Verify SMS code and complete phone authentication.
 
@@ -140,7 +143,7 @@ class ResyClient:
             code: The SMS verification code
 
         Returns:
-            ResyAuth with token and user info
+            ResyAuth with token if successful, or ResyChallenge if additional verification needed
         """
         # Verify also uses form-urlencoded with E.164 format
         data = {
@@ -151,6 +154,56 @@ class ResyClient:
         # Same endpoint as request_sms_code - adding code param completes verification
         result = await self._request(
             "POST", "/3/auth/mobile", data=data, use_json=False
+        )
+
+        # Check if we got a challenge instead of direct auth
+        if "challenge" in result:
+            challenge = result["challenge"]
+            mobile_claim = result.get("mobile_claim", {})
+            return ResyChallenge(
+                challenge_id=challenge["challenge_id"],
+                claim_token=mobile_claim.get("claim_token", ""),
+                first_name=challenge.get("first_name"),
+                challenge_type="email",  # Currently only email challenges
+                message=challenge.get("message"),
+            )
+
+        # Direct auth - extract payment method if available
+        payment_method_id = None
+        if "payment_method_id" in result:
+            payment_method_id = str(result["payment_method_id"])
+        elif "payment_methods" in result and result["payment_methods"]:
+            payment_method_id = str(result["payment_methods"][0].get("id"))
+
+        return ResyAuth(
+            token=result["token"],
+            payment_method_id=payment_method_id,
+            first_name=result.get("first_name"),
+            last_name=result.get("last_name"),
+        )
+
+    async def complete_challenge(
+        self, challenge_id: str, claim_token: str, email: str
+    ) -> ResyAuth:
+        """
+        Complete an email verification challenge.
+
+        Args:
+            challenge_id: Challenge ID from verify_sms_code
+            claim_token: Claim token from verify_sms_code
+            email: Email address to verify
+
+        Returns:
+            ResyAuth with token and user info
+        """
+        data = {
+            "challenge_id": challenge_id,
+            "claim_token": claim_token,
+            "em_address": email,
+        }
+
+        result = await self._request(
+            "POST", "/3/auth/challenge", data=data, use_json=False
         )
 
         # Extract payment method if available
@@ -191,6 +244,11 @@ class ResyClient:
         venues = []
         for hit in result.get("search", {}).get("hits", []):
             try:
+                # Rating can be a float or dict with 'average' key
+                rating = hit.get("rating")
+                if isinstance(rating, dict):
+                    rating = rating.get("average")
+
                 venue = Venue(
                     venue_id=hit["id"]["resy"],
                     name=hit["name"],
@@ -199,7 +257,7 @@ class ResyClient:
                     cuisine=hit.get("cuisine", [None])[0]
                     if hit.get("cuisine")
                     else None,
-                    rating=hit.get("rating"),
+                    rating=rating,
                 )
                 venues.append(venue)
             except (KeyError, IndexError):
