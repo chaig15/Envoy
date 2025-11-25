@@ -1,6 +1,9 @@
 """Main entry point for the Resnype Telegram bot."""
 
 import logging
+import sys
+from pathlib import Path
+
 from telegram import Update, BotCommand
 from telegram.ext import Application, CommandHandler, ContextTypes
 
@@ -18,8 +21,13 @@ from resnype.services import AvailabilityMonitor
 # Configure logging
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    level=logging.INFO,
+    level=logging.DEBUG,
 )
+# Reduce noise from http libraries
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
+logging.getLogger("aiohttp").setLevel(logging.WARNING)
+
 logger = logging.getLogger(__name__)
 
 
@@ -123,6 +131,26 @@ def main() -> None:
     # Run the bot
     logger.info("Starting Resnype bot...")
     application.run_polling(allowed_updates=Update.ALL_TYPES)
+
+
+def main_dev() -> None:
+    """Start the bot with hot reload for development."""
+    try:
+        from watchfiles import run_process
+    except ImportError:
+        logger.error("watchfiles not installed. Run: uv sync")
+        sys.exit(1)
+
+    logger.info("Starting Resnype in development mode with hot reload...")
+
+    # Watch the resnype package directory
+    watch_path = Path(__file__).parent
+
+    run_process(
+        watch_path,
+        target=main,
+        callback=lambda changes: logger.info(f"Detected changes: {changes}"),
+    )
 
 
 if __name__ == "__main__":

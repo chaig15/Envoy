@@ -16,6 +16,7 @@ dependencies = [
 
 [project.scripts]
 resnype = "resnype.main:main"
+resnype-dev = "resnype.main:main_dev"
 
 [build-system]
 requires = ["hatchling"]
@@ -29,5 +30,6 @@ dev-dependencies = [
     "pytest>=7.4.0",
     "pytest-asyncio>=0.21.0",
     "ruff>=0.1.0",
+    "watchfiles>=0.21.0",
 ]
 

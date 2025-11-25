@@ -1,9 +1,11 @@
 """Resy API client for authentication, search, availability, and booking."""
 
 import json
-import aiohttp
-from typing import Optional
+import logging
 from datetime import date
+from typing import Optional
+
+import aiohttp
 
 from resnype.config import get_settings
 from .models import (
@@ -14,6 +16,8 @@ from .models import (
     BookingDetails,
     BookingResult,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class ResyError(Exception):
@@ -69,41 +73,85 @@ class ResyClient:
         endpoint: str,
         params: Optional[dict] = None,
         data: Optional[dict] = None,
+        use_json: bool = False,
     ) -> dict:
         """Make an API request."""
         session = await self._get_session()
         url = f"{self.base_url}{endpoint}"
 
-        async with session.request(
-            method,
-            url,
-            headers=self._get_headers(),
-            params=params,
-            data=data,
-        ) as response:
+        headers = self._get_headers()
+
+        # Some endpoints need JSON instead of form-urlencoded
+        if use_json:
+            headers["Content-Type"] = "application/json"
+
+        logger.debug(
+            f"Resy API {method} {endpoint} params={params} data={data} json={use_json}"
+        )
+
+        request_kwargs = {
+            "headers": headers,
+            "params": params,
+        }
+
+        if data:
+            if use_json:
+                request_kwargs["json"] = data
+            else:
+                request_kwargs["data"] = data
+
+        async with session.request(method, url, **request_kwargs) as response:
+            text = await response.text()
+            logger.debug(f"Resy API response {response.status}: {text[:500]}")
+
             if response.status == 401:
                 raise ResyError("Authentication failed. Please login again.", 401)
             if response.status == 404:
                 raise ResyError("Not found.", 404)
             if response.status >= 400:
-                text = await response.text()
                 raise ResyError(f"API error: {text}", response.status)
 
-            return await response.json()
+            return json.loads(text)
 
     # ============ Authentication ============
 
-    async def login(self, email: str, password: str) -> ResyAuth:
+    async def request_sms_code(self, phone_number: str) -> bool:
         """
-        Authenticate with Resy using email and password.
-        Returns auth token and payment method ID.
+        Request an SMS verification code for phone login.
+
+        Args:
+            phone_number: Phone number with country code (e.g., "+14155551234")
+
+        Returns:
+            True if SMS was sent successfully
         """
+        # Resy API wants E.164 format with + prefix, form-urlencoded
+        data = {"mobile_number": phone_number}
+
+        await self._request("POST", "/3/auth/mobile", data=data, use_json=False)
+        return True
+
+    async def verify_sms_code(self, phone_number: str, code: str) -> ResyAuth:
+        """
+        Verify SMS code and complete phone authentication.
+
+        Args:
+            phone_number: Phone number used to request the code
+            code: The SMS verification code
+
+        Returns:
+            ResyAuth with token and user info
+        """
+        # Verify also uses form-urlencoded with E.164 format
         data = {
-            "email": email,
-            "password": password,
+            "mobile_number": phone_number,
+            "code": code,
         }
 
-        result = await self._request("POST", "/3/auth/password", data=data)
+        # Same endpoint as request_sms_code - adding code param completes verification
+        result = await self._request(
+            "POST", "/3/auth/mobile", data=data, use_json=False
+        )
 
         # Extract payment method if available
         payment_method_id = None
