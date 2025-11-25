@@ -1,27 +1,29 @@
 """Main entry point for the Resnype Telegram bot."""
 
 import logging
+
+# Configure logging (INFO for production, DEBUG for development)
+import os
 import sys
 from pathlib import Path
 
-from telegram import Update, BotCommand
+from telegram import BotCommand, Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 
 from resnype.config import get_settings
 from resnype.db import Database
 from resnype.handlers import (
     setup_auth_handlers,
+    setup_booking_handlers,
     setup_search_handlers,
     setup_watch_handlers,
-    setup_booking_handlers,
 )
 from resnype.services import AvailabilityMonitor
 
-
-# Configure logging
+log_level = logging.DEBUG if os.getenv("DEV") else logging.INFO
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    level=logging.DEBUG,
+    level=log_level,
 )
 # Reduce noise from http libraries
 logging.getLogger("httpx").setLevel(logging.WARNING)
