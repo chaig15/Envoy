@@ -1,6 +1,6 @@
 """Booking handlers for one-click reservation."""
 
-from datetime import datetime
+import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, CallbackQueryHandler
 
@@ -8,25 +8,37 @@ from resnype.db.queries import UserQueries, WatchQueries
 from resnype.resy import ResyClient
 from resnype.resy.client import ResyError
 from resnype.encryption import decrypt_token
+from resnype.services.notifier import get_pending_slot, clear_pending_slots
+
+logger = logging.getLogger(__name__)
 
 
 async def book_slot(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """
     Handle one-click booking from alert notification.
 
-    Callback data format: book:{watch_id}:{config_token}:{date}
+    Callback data format: book:{watch_id}:{slot_index}
     """
     query = update.callback_query
     await query.answer("Booking...")
 
     # Parse callback data
-    parts = query.data.split(":", 3)
-    if len(parts) != 4:
+    parts = query.data.split(":")
+    if len(parts) != 3:
         await query.edit_message_text("❌ Invalid booking data.")
         return
 
-    _, watch_id, config_token, date_str = parts
+    _, watch_id, slot_index = parts
     watch_id = int(watch_id)
+    slot_index = int(slot_index)
+
+    # Get config token from cache
+    config_token = get_pending_slot(watch_id, slot_index)
+    if not config_token:
+        await query.edit_message_text(
+            "❌ Booking expired. Please wait for a new availability alert."
+        )
+        return
 
     # Get watch and user info
     watch = await WatchQueries.get_by_id(watch_id)
@@ -45,41 +57,36 @@ async def book_slot(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         parse_mode="Markdown",
     )
 
+    client = ResyClient(auth_token=decrypt_token(user.resy_token_encrypted))
     try:
-        # Decrypt token and book
-        token = decrypt_token(user.resy_token_encrypted)
-        client = ResyClient(auth_token=token)
-
-        check_date = datetime.strptime(date_str, "%Y-%m-%d").date()
-
         result = await client.quick_book(
             config_token=config_token,
             party_size=watch.party_size,
-            check_date=check_date,
+            check_date=watch.date,
             payment_method_id=user.resy_payment_method_id,
         )
-        await client.close()
 
         if result.success:
-            # Deactivate the watch since we booked
+            # Deactivate the watch and clear pending slots
             await WatchQueries.deactivate(watch_id, update.effective_user.id)
+            clear_pending_slots(watch_id)
 
             await query.edit_message_text(
                 f"🎉 **Reservation Confirmed!**\n\n"
                 f"🍽 {result.venue_name or watch.venue_name}\n"
-                f"📅 {result.date or date_str}\n"
+                f"📅 {result.date or watch.date.isoformat()}\n"
                 f"⏰ {result.time or 'See confirmation'}\n"
                 f"👥 {result.party_size or watch.party_size} guests\n\n"
                 f"Confirmation: `{result.confirmation_number or 'Check Resy app'}`",
                 parse_mode="Markdown",
             )
         else:
-            # Booking failed - offer to try again or slot may be gone
+            # Booking failed - offer to try again
             keyboard = [
                 [
                     InlineKeyboardButton(
                         "🔄 Try Again",
-                        callback_data=f"book:{watch_id}:{config_token}:{date_str}",
+                        callback_data=f"book:{watch_id}:{slot_index}",
                     )
                 ]
             ]
@@ -93,14 +100,18 @@ async def book_slot(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             )
 
     except ResyError as e:
+        logger.error(f"Booking error: {e.message}")
         await query.edit_message_text(
             f"❌ Booking error: {e.message}\n\n"
             "Please try again or book directly on Resy."
         )
-    except Exception:
+    except Exception as e:
+        logger.exception(f"Unexpected booking error: {e}")
         await query.edit_message_text(
             "❌ Something went wrong. Please try booking directly on Resy."
         )
+    finally:
+        await client.close()
 
 
 async def dismiss_alert(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
