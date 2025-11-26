@@ -331,16 +331,10 @@ async def unwatch(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 def setup_watch_handlers(application) -> None:
     """Register watch handlers with the application."""
 
-    # Watch creation conversation - handles both /watch and date input after venue selection
+    # Watch creation conversation
     watch_conv = ConversationHandler(
         entry_points=[
             CommandHandler("watch", watch_start),
-            MessageHandler(
-                # Match single date or date range
-                filters.Regex(r"^\d{4}-\d{2}-\d{2}(\s*(to|-|–)\s*\d{4}-\d{2}-\d{2})?$")
-                & ~filters.COMMAND,
-                watch_date_input,
-            ),
         ],
         states={
             WATCH_DATE: [
@@ -353,6 +347,8 @@ def setup_watch_handlers(application) -> None:
         },
         fallbacks=[
             CommandHandler("cancel", watch_cancel),
+            # Any other command exits the conversation
+            MessageHandler(filters.COMMAND, watch_cancel),
         ],
         per_message=False,
     )

@@ -96,7 +96,9 @@ class Availability(BaseModel):
     party_size: int
     slots: list[TimeSlot] = []
 
-    def filter_by_time_range(self, earliest: Optional[time], latest: Optional[time]) -> list[TimeSlot]:
+    def filter_by_time_range(
+        self, earliest: Optional[time], latest: Optional[time]
+    ) -> list[TimeSlot]:
         """Filter slots to those within the given time range."""
         if not earliest and not latest:
             return self.slots
@@ -133,4 +135,3 @@ class BookingResult(BaseModel):
     time: Optional[str] = None
     party_size: Optional[int] = None
     error_message: Optional[str] = None
-

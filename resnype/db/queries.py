@@ -5,7 +5,7 @@ from typing import Optional
 import json
 
 from .connection import Database
-from .models import User, Watch, WatchGroup
+from .models import User, Watch, WatchGroup, Snipe
 
 
 class UserQueries:
@@ -42,7 +42,7 @@ class UserQueries:
         """Update user's Resy token."""
         await Database.execute(
             """
-            UPDATE users 
+            UPDATE users
             SET resy_token_encrypted = $2, resy_payment_method_id = $3
             WHERE telegram_id = $1
             """,
@@ -56,7 +56,7 @@ class UserQueries:
         """Clear user's Resy token (logout)."""
         await Database.execute(
             """
-            UPDATE users 
+            UPDATE users
             SET resy_token_encrypted = NULL, resy_payment_method_id = NULL
             WHERE telegram_id = $1
             """,
@@ -119,8 +119,8 @@ class WatchQueries:
             UPDATE watches w
             SET active = FALSE
             FROM users u
-            WHERE w.user_id = u.id 
-              AND w.id = $1 
+            WHERE w.user_id = u.id
+              AND w.id = $1
               AND u.telegram_id = $2
             """,
             watch_id,
@@ -136,7 +136,7 @@ class WatchQueries:
         """
         rows = await Database.fetch(
             """
-            SELECT 
+            SELECT
                 w.*,
                 u.telegram_id,
                 u.resy_token_encrypted
@@ -190,4 +190,137 @@ class WatchQueries:
         )
         if row:
             return Watch.model_validate(dict(row))
+        return None
+
+
+class SnipeQueries:
+    """Database operations for snipes."""
+
+    @staticmethod
+    async def create(
+        user_id: int,
+        venue_id: int,
+        venue_name: str,
+        target_date: date,
+        release_date: date,
+        party_size: int,
+        release_time: Optional[time] = None,
+        release_timezone: Optional[str] = None,
+    ) -> Snipe:
+        """Create a new snipe."""
+        # Use Python defaults to avoid SQL type casting issues
+        if release_time is None:
+            release_time = time(9, 0)
+        if release_timezone is None:
+            release_timezone = "America/New_York"
+
+        row = await Database.fetchrow(
+            """
+            INSERT INTO snipes (user_id, venue_id, venue_name, target_date, release_date, party_size, release_time, release_timezone)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            RETURNING *
+            """,
+            user_id,
+            venue_id,
+            venue_name,
+            target_date,
+            release_date,
+            party_size,
+            release_time,
+            release_timezone,
+        )
+        return Snipe.model_validate(dict(row))
+
+    @staticmethod
+    async def get_user_snipes(
+        telegram_id: int, pending_only: bool = True
+    ) -> list[Snipe]:
+        """Get all snipes for a user."""
+        query = """
+            SELECT s.*, u.telegram_id, u.resy_token_encrypted, u.resy_payment_method_id
+            FROM snipes s
+            JOIN users u ON s.user_id = u.id
+            WHERE u.telegram_id = $1
+        """
+        if pending_only:
+            query += " AND s.status = 'pending'"
+        query += " ORDER BY s.target_date, s.created_at"
+
+        rows = await Database.fetch(query, telegram_id)
+        return [Snipe.model_validate(dict(row)) for row in rows]
+
+    @staticmethod
+    async def get_pending_snipes_due() -> list[Snipe]:
+        """
+        Get pending snipes that should execute soon.
+        Returns snipes where release_date is today (reservations open today).
+        """
+        rows = await Database.fetch(
+            """
+            SELECT s.*, u.telegram_id, u.resy_token_encrypted, u.resy_payment_method_id
+            FROM snipes s
+            JOIN users u ON s.user_id = u.id
+            WHERE s.status = 'pending'
+              AND s.release_date = CURRENT_DATE
+              AND u.resy_token_encrypted IS NOT NULL
+            ORDER BY s.release_time
+            """
+        )
+        return [Snipe.model_validate(dict(row)) for row in rows]
+
+    @staticmethod
+    async def update_status(
+        snipe_id: int,
+        status: str,
+        reservation_id: Optional[str] = None,
+        message: Optional[str] = None,
+    ) -> None:
+        """Update snipe status after execution."""
+        await Database.execute(
+            """
+            UPDATE snipes
+            SET status = $2,
+                result_reservation_id = $3,
+                result_message = $4,
+                executed_at = NOW()
+            WHERE id = $1
+            """,
+            snipe_id,
+            status,
+            reservation_id,
+            message,
+        )
+
+    @staticmethod
+    async def cancel(snipe_id: int, telegram_id: int) -> bool:
+        """Cancel a pending snipe. Returns True if found and cancelled."""
+        result = await Database.execute(
+            """
+            UPDATE snipes s
+            SET status = 'cancelled'
+            FROM users u
+            WHERE s.user_id = u.id
+              AND s.id = $1
+              AND u.telegram_id = $2
+              AND s.status = 'pending'
+            """,
+            snipe_id,
+            telegram_id,
+        )
+        return result == "UPDATE 1"
+
+    @staticmethod
+    async def get_by_id(snipe_id: int) -> Optional[Snipe]:
+        """Get a snipe by ID with user info."""
+        row = await Database.fetchrow(
+            """
+            SELECT s.*, u.telegram_id, u.resy_token_encrypted, u.resy_payment_method_id
+            FROM snipes s
+            JOIN users u ON s.user_id = u.id
+            WHERE s.id = $1
+            """,
+            snipe_id,
+        )
+        if row:
+            return Snipe.model_validate(dict(row))
         return None

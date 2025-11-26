@@ -16,9 +16,10 @@ from resnype.handlers import (
     setup_auth_handlers,
     setup_booking_handlers,
     setup_search_handlers,
+    setup_snipe_handlers,
     setup_watch_handlers,
 )
-from resnype.services import AvailabilityMonitor
+from resnype.services import AvailabilityMonitor, Sniper
 
 log_level = logging.DEBUG if os.getenv("DEV") else logging.INFO
 logging.basicConfig(
@@ -61,13 +62,15 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         "/login - Connect your Resy account\n"
         "/logout - Disconnect Resy account\n"
         "/search `<name>` - Search for restaurants\n"
+        "/watch - Watch for cancellations\n"
         "/watches - View your active watches\n"
+        "/snipe - Auto-book at release time\n"
+        "/snipes - View pending snipes\n"
         "/cancel - Cancel current operation\n"
         "/help - Show this message\n\n"
-        "**Tips:**\n"
-        "• Set watches for dates 1-2 weeks out\n"
-        "• Popular spots release cancellations throughout the day\n"
-        "• Book quickly when you get an alert!",
+        "**Watch vs Snipe:**\n"
+        "• Watch = monitors for cancellations (ongoing)\n"
+        "• Snipe = grabs new slots at 9am release (one-shot)",
         parse_mode="Markdown",
     )
 
@@ -85,6 +88,7 @@ async def post_init(application: Application) -> None:
         BotCommand("logout", "Disconnect Resy account"),
         BotCommand("search", "Search for restaurants"),
         BotCommand("watches", "View your active watches"),
+        BotCommand("snipes", "View pending snipes"),
         BotCommand("help", "Show help message"),
     ]
     await application.bot.set_my_commands(commands)
@@ -95,6 +99,12 @@ async def post_init(application: Application) -> None:
     monitor.start()
     logger.info("Availability monitor started")
 
+    # Start sniper service
+    sniper = Sniper(application.bot)
+    application.bot_data["sniper"] = sniper
+    sniper.start()
+    logger.info("Sniper service started")
+
 
 async def post_shutdown(application: Application) -> None:
     """Run on shutdown."""
@@ -102,6 +112,11 @@ async def post_shutdown(application: Application) -> None:
     monitor = application.bot_data.get("monitor")
     if monitor:
         monitor.stop()
+
+    # Stop sniper
+    sniper = application.bot_data.get("sniper")
+    if sniper:
+        sniper.stop()
 
     # Disconnect database
     await Database.disconnect()
@@ -128,6 +143,7 @@ def main() -> None:
     setup_auth_handlers(application)
     setup_search_handlers(application)
     setup_watch_handlers(application)
+    setup_snipe_handlers(application)
     setup_booking_handlers(application)
 
     # Run the bot
@@ -137,6 +153,9 @@ def main() -> None:
 
 def main_dev() -> None:
     """Start the bot with hot reload for development."""
+    # Enable debug logging for development
+    os.environ["DEV"] = "1"
+
     try:
         from watchfiles import run_process
     except ImportError:
