@@ -13,7 +13,7 @@ from telegram.ext import (
     filters,
 )
 
-from resnype.db.queries import UserQueries, WatchQueries
+from envoy.db.queries import UserQueries, WatchQueries
 
 # Conversation states for watch creation
 WATCH_DATE, WATCH_PARTY_SIZE, WATCH_TIME_PREF = range(3)

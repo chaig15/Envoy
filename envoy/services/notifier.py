@@ -2,8 +2,8 @@
 
 from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup
 
-from resnype.db.models import Watch
-from resnype.resy.models import TimeSlot
+from envoy.db.models import Watch
+from envoy.resy.models import TimeSlot
 
 
 # Cache for pending booking slots (watch_id -> {slot_index -> token})

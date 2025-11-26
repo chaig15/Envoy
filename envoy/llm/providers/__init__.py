@@ -4,7 +4,7 @@ import os
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from resnype.llm.base import LLMProvider
+    from envoy.llm.base import LLMProvider
 
 
 def get_provider(
@@ -27,7 +27,7 @@ def get_provider(
     Returns:
         Configured LLMProvider instance
     """
-    from resnype.config import get_settings
+    from envoy.config import get_settings
 
     settings = get_settings()
 
@@ -36,22 +36,22 @@ def get_provider(
     model_name = model or settings.llm_model
 
     if provider == "anthropic":
-        from resnype.llm.providers.anthropic import AnthropicProvider
+        from envoy.llm.providers.anthropic import AnthropicProvider
 
         return AnthropicProvider(model=model_name or "claude-sonnet-4-20250514")
 
     elif provider == "openai":
-        from resnype.llm.providers.openai import OpenAIProvider
+        from envoy.llm.providers.openai import OpenAIProvider
 
         return OpenAIProvider(model=model_name or "gpt-4o")
 
     elif provider == "openai_responses":
-        from resnype.llm.providers.openai_responses import OpenAIResponsesProvider
+        from envoy.llm.providers.openai_responses import OpenAIResponsesProvider
 
         return OpenAIResponsesProvider(model=model_name or "gpt-4o")
 
     elif provider == "ollama":
-        from resnype.llm.providers.openai import OpenAIProvider
+        from envoy.llm.providers.openai import OpenAIProvider
 
         return OpenAIProvider(
             model=model_name or "llama3.1:8b",
@@ -60,7 +60,7 @@ def get_provider(
         )
 
     elif provider == "openrouter":
-        from resnype.llm.providers.openai import OpenAIProvider
+        from envoy.llm.providers.openai import OpenAIProvider
 
         return OpenAIProvider(
             model=model_name or "anthropic/claude-3.5-sonnet",
@@ -69,7 +69,7 @@ def get_provider(
         )
 
     elif provider == "vllm":
-        from resnype.llm.providers.openai import OpenAIProvider
+        from envoy.llm.providers.openai import OpenAIProvider
 
         return OpenAIProvider(
             model=model_name or "meta-llama/Llama-3.1-8B-Instruct",

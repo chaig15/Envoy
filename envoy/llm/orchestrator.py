@@ -4,12 +4,12 @@ import logging
 from datetime import date, time, timedelta
 from typing import Any, Optional
 
-from resnype.db.models import User
-from resnype.db.queries import ConversationQueries, SnipeQueries, WatchQueries
-from resnype.llm.base import LLMProvider, LLMResponse, Message, ToolCall
-from resnype.llm.providers import get_provider
-from resnype.llm.tools import SYSTEM_PROMPT, TOOLS
-from resnype.resy import ResyClient
+from envoy.db.models import User
+from envoy.db.queries import ConversationQueries, SnipeQueries, WatchQueries
+from envoy.llm.base import LLMProvider, LLMResponse, Message, ToolCall
+from envoy.llm.providers import get_provider
+from envoy.llm.tools import SYSTEM_PROMPT, TOOLS
+from envoy.resy import ResyClient
 
 logger = logging.getLogger(__name__)
 

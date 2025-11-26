@@ -4,7 +4,7 @@ import asyncpg
 from typing import Optional
 from contextlib import asynccontextmanager
 
-from resnype.config import get_settings
+from envoy.config import get_settings
 
 
 class Database:

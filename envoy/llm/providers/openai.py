@@ -4,7 +4,7 @@ import json
 import logging
 from typing import Optional
 
-from resnype.llm.base import LLMProvider, LLMResponse, Message, ToolCall
+from envoy.llm.base import LLMProvider, LLMResponse, Message, ToolCall
 
 logger = logging.getLogger(__name__)
 

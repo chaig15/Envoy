@@ -135,7 +135,7 @@ TOOLS = [
     },
 ]
 
-SYSTEM_PROMPT = """You are Resnype, a reservation assistant that helps users book hard-to-get restaurant reservations.
+SYSTEM_PROMPT = """You are Envoy, a personal AI agent that helps users book hard-to-get restaurant reservations.
 
 ## Capabilities
 - Search for restaurants

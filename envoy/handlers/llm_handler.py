@@ -6,8 +6,8 @@ from typing import Optional
 from telegram import Update
 from telegram.ext import ContextTypes, MessageHandler, filters
 
-from resnype.config import get_settings
-from resnype.db.queries import UserQueries
+from envoy.config import get_settings
+from envoy.db.queries import UserQueries
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +19,7 @@ def get_orchestrator():
     """Get or create the LLM orchestrator (lazy loaded)."""
     global _orchestrator
     if _orchestrator is None:
-        from resnype.llm import LLMOrchestrator
+        from envoy.llm import LLMOrchestrator
 
         _orchestrator = LLMOrchestrator()
     return _orchestrator

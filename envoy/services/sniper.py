@@ -8,12 +8,12 @@ from typing import Optional
 import pytz
 from telegram import Bot
 
-from resnype.config import get_settings
-from resnype.db.models import Snipe
-from resnype.db.queries import SnipeQueries
-from resnype.encryption import decrypt_token
-from resnype.resy import ResyClient
-from resnype.resy.client import ResyError
+from envoy.config import get_settings
+from envoy.db.models import Snipe
+from envoy.db.queries import SnipeQueries
+from envoy.encryption import decrypt_token
+from envoy.resy import ResyClient
+from envoy.resy.client import ResyError
 
 logger = logging.getLogger(__name__)
 

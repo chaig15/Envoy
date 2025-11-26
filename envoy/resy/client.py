@@ -7,7 +7,7 @@ from typing import Optional
 
 import aiohttp
 
-from resnype.config import get_settings
+from envoy.config import get_settings
 from .models import (
     ResyAuth,
     ResyChallenge,

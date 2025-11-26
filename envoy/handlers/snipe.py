@@ -14,7 +14,7 @@ from telegram.ext import (
     filters,
 )
 
-from resnype.db.queries import SnipeQueries, UserQueries
+from envoy.db.queries import SnipeQueries, UserQueries
 
 logger = logging.getLogger(__name__)
 

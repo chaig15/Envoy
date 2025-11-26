@@ -12,11 +12,11 @@ from telegram.ext import (
     filters,
 )
 
-from resnype.db.queries import UserQueries
-from resnype.encryption import encrypt_token
-from resnype.resy import ResyClient
-from resnype.resy.client import ResyError
-from resnype.resy.models import ResyChallenge
+from envoy.db.queries import UserQueries
+from envoy.encryption import encrypt_token
+from envoy.resy import ResyClient
+from envoy.resy.client import ResyError
+from envoy.resy.models import ResyChallenge
 
 logger = logging.getLogger(__name__)
 

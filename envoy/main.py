@@ -1,4 +1,4 @@
-"""Main entry point for the Resnype Telegram bot."""
+"""Main entry point for the Envoy Telegram bot."""
 
 import logging
 
@@ -10,9 +10,9 @@ from pathlib import Path
 from telegram import BotCommand, Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 
-from resnype.config import get_settings
-from resnype.db import Database
-from resnype.handlers import (
+from envoy.config import get_settings
+from envoy.db import Database
+from envoy.handlers import (
     setup_auth_handlers,
     setup_booking_handlers,
     setup_llm_handler,
@@ -20,7 +20,7 @@ from resnype.handlers import (
     setup_snipe_handlers,
     setup_watch_handlers,
 )
-from resnype.services import AvailabilityMonitor, Sniper
+from envoy.services import AvailabilityMonitor, Sniper
 
 log_level = logging.DEBUG if os.getenv("DEV") else logging.INFO
 logging.basicConfig(
@@ -38,19 +38,19 @@ logger = logging.getLogger(__name__)
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /start command."""
     await update.message.reply_text(
-        "👋 **Welcome to Resnype!**\n\n"
-        "I help you snag hard-to-get restaurant reservations on Resy.\n\n"
+        "👋 **Welcome to Envoy!**\n\n"
+        "I'm your personal AI agent for booking reservations.\n\n"
         "**How it works:**\n"
         "1️⃣ Connect your Resy account with /login\n"
-        "2️⃣ Search for a restaurant with /search\n"
-        "3️⃣ Set up a watch for the date you want\n"
-        "4️⃣ I'll notify you instantly when a table opens!\n"
-        "5️⃣ One-click to book it before anyone else\n\n"
+        "2️⃣ Tell me what you want (or use /search)\n"
+        "3️⃣ I'll handle the rest - watches, snipes, booking\n\n"
         "**Commands:**\n"
         "/login - Connect your Resy account\n"
         "/search `<restaurant>` - Find restaurants\n"
         "/watches - View your active watches\n"
-        "/help - Show this message",
+        "/snipes - View pending snipes\n"
+        "/help - Show this message\n\n"
+        "💬 Or just tell me what you need in plain English!",
         parse_mode="Markdown",
     )
 
@@ -67,7 +67,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         )
 
     await update.message.reply_text(
-        "🍽 **Resnype Commands**\n\n"
+        "🤖 **Envoy Commands**\n\n"
         "/start - Welcome message\n"
         "/login - Connect your Resy account\n"
         "/logout - Disconnect Resy account\n"
@@ -161,7 +161,7 @@ def main() -> None:
     setup_llm_handler(application)
 
     # Run the bot
-    logger.info("Starting Resnype bot...")
+    logger.info("Starting Envoy bot...")
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 
@@ -176,9 +176,9 @@ def main_dev() -> None:
         logger.error("watchfiles not installed. Run: uv sync")
         sys.exit(1)
 
-    logger.info("Starting Resnype in development mode with hot reload...")
+    logger.info("Starting Envoy in development mode with hot reload...")
 
-    # Watch the resnype package directory
+    # Watch the envoy package directory
     watch_path = Path(__file__).parent
 
     run_process(
