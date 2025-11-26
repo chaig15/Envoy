@@ -27,13 +27,16 @@ class Settings(BaseSettings):
 
     # LLM settings
     llm_enabled: bool = False  # Set to True to enable natural language mode
-    llm_provider: str = "anthropic"  # anthropic, openai, ollama, openrouter, vllm
+    llm_provider: str = (
+        "anthropic"  # anthropic, openai, ollama, openrouter, deepinfra, vllm
+    )
     llm_model: Optional[str] = None  # Override default model for provider
 
     # LLM API keys (optional, provider-specific)
     anthropic_api_key: Optional[str] = None
     openai_api_key: Optional[str] = None
     openrouter_api_key: Optional[str] = None
+    deepinfra_api_key: Optional[str] = None
 
     class Config:
         env_file = ".env"

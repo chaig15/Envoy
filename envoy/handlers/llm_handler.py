@@ -18,10 +18,10 @@ _orchestrator: Optional["LLMOrchestrator"] = None  # noqa: F821
 def get_orchestrator():
     """Get or create the LLM orchestrator (lazy loaded)."""
     global _orchestrator
-    if _orchestrator is None:
-        from envoy.llm import LLMOrchestrator
+    # Always recreate to pick up config changes
+    from envoy.llm import LLMOrchestrator
 
-        _orchestrator = LLMOrchestrator()
+    _orchestrator = LLMOrchestrator()
     return _orchestrator
 
 

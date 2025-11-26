@@ -33,6 +33,10 @@ class OpenAIProvider(LLMProvider):
         except ImportError:
             raise ImportError("openai package required. Run: uv add openai")
 
+        # Explicitly pass api_key to prevent fallback to OPENAI_API_KEY env var
+        # If api_key is None and base_url is set, use empty string to force no fallback
+        if base_url and not api_key:
+            api_key = ""  # Prevent fallback to OPENAI_API_KEY when using custom base_url
         self.client = AsyncOpenAI(base_url=base_url, api_key=api_key)
         self.model = model
         self.base_url = base_url

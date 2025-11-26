@@ -21,6 +21,7 @@ def get_provider(
             - "openai_responses": GPT models (newer Responses API)
             - "ollama": Local Ollama models
             - "openrouter": OpenRouter API (access to 100+ models)
+            - "deepinfra": DeepInfra API (OpenAI-compatible, access to many models)
             - "vllm": Local vLLM server
         model: Override model from config
 
@@ -74,6 +75,21 @@ def get_provider(
             api_key=api_key,
         )
 
+    elif provider == "deepinfra":
+        from envoy.llm.providers.openai import OpenAIProvider
+
+        api_key = settings.deepinfra_api_key or os.environ.get("DEEPINFRA_API_KEY")
+        if not api_key:
+            raise ValueError(
+                "DEEPINFRA_API_KEY is required when using deepinfra provider. "
+                "Set it in your .env file or environment variables."
+            )
+        return OpenAIProvider(
+            model=model_name or "meta-llama/Llama-3.1-70B-Instruct",
+            base_url="https://api.deepinfra.com/v1/openai",
+            api_key=api_key,
+        )
+
     elif provider == "vllm":
         from envoy.llm.providers.openai import OpenAIProvider
 
@@ -86,5 +102,5 @@ def get_provider(
     else:
         raise ValueError(
             f"Unknown LLM provider: {provider}. "
-            "Options: anthropic, openai, openai_responses, ollama, openrouter, vllm"
+            "Options: anthropic, openai, openai_responses, ollama, openrouter, deepinfra, vllm"
         )
