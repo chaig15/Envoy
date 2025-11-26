@@ -100,21 +100,34 @@ class LLMOrchestrator:
         history.append(Message(role="user", content=user_message))
 
         try:
-            # Send to LLM
-            response = await self.provider.chat(
-                messages=history[-MAX_HISTORY:],
-                tools=TOOLS,
-                system=SYSTEM_PROMPT,
-            )
+            # Agentic loop: keep calling tools until LLM returns text-only response
+            max_iterations = 10  # Safety limit
+            iteration = 0
 
-            logger.debug(
-                f"LLM response: finish_reason={response.finish_reason}, "
-                f"tool_calls={len(response.tool_calls)}, "
-                f"usage={response.usage}"
-            )
+            while iteration < max_iterations:
+                iteration += 1
 
-            # Handle tool calls if any
-            if response.tool_calls:
+                # Send to LLM
+                response = await self.provider.chat(
+                    messages=history[-MAX_HISTORY:],
+                    tools=TOOLS,
+                    system=SYSTEM_PROMPT,
+                )
+
+                logger.debug(
+                    f"LLM response (iter {iteration}): finish_reason={response.finish_reason}, "
+                    f"tool_calls={len(response.tool_calls)}, "
+                    f"usage={response.usage}"
+                )
+
+                # If no tool calls, we're done
+                if not response.tool_calls:
+                    final_text = (
+                        response.content or "I'm not sure how to help with that."
+                    )
+                    history.append(Message(role="assistant", content=final_text))
+                    break
+
                 # Add assistant message with tool calls to history
                 history.append(
                     Message(
@@ -124,8 +137,7 @@ class LLMOrchestrator:
                     )
                 )
 
-                # Execute tools and collect results
-                tool_results = []
+                # Execute all tool calls
                 for tool_call in response.tool_calls:
                     result = await self._execute_tool(
                         tool_call.name,
@@ -133,7 +145,6 @@ class LLMOrchestrator:
                         user,
                         telegram_id,
                     )
-                    tool_results.append((tool_call, result))
 
                     # Add tool result to history
                     history.append(
@@ -144,20 +155,11 @@ class LLMOrchestrator:
                         )
                     )
 
-                # Get final response after tool execution
-                final_response = await self.provider.chat(
-                    messages=history[-MAX_HISTORY:],
-                    tools=TOOLS,
-                    system=SYSTEM_PROMPT,
-                )
-
-                # Add final assistant response to history
-                final_text = final_response.content or "Done!"
-                history.append(Message(role="assistant", content=final_text))
-
             else:
-                # No tool calls, just a text response
-                final_text = response.content or "I'm not sure how to help with that."
+                # Hit max iterations
+                final_text = (
+                    "I got stuck in a loop. Please try again with a simpler request."
+                )
                 history.append(Message(role="assistant", content=final_text))
 
             # Save history to DB (keep last MAX_HISTORY messages)
@@ -229,15 +231,17 @@ class LLMOrchestrator:
         """Search for restaurants."""
         client = ResyClient()
         try:
-            venues = await client.search_venues(query, limit=5)
+            venues = await client.search_venues(query)
+            venues = venues[:5]  # Limit results
 
             if not venues:
                 return f"No restaurants found for '{query}'"
 
             results = []
             for v in venues:
+                location = v.display_location or "Unknown area"
                 results.append(
-                    f"- {v.name} (ID: {v.id}): {v.neighborhood or 'Unknown area'}, "
+                    f"- {v.name} (ID: {v.id}): {location}, "
                     f"{v.cuisine or 'Restaurant'}, ${v.price_range or '?'} price range"
                 )
 
@@ -250,7 +254,8 @@ class LLMOrchestrator:
         """Create a snipe."""
         target_date = date.fromisoformat(args["target_date"])
         days_advance = args["days_advance"]
-        release_date = target_date - timedelta(days=days_advance)
+        # Inclusive counting: release day counts as day 1
+        release_date = target_date - timedelta(days=days_advance - 1)
 
         # Parse release time
         release_time_str = args.get("release_time", "09:00")
