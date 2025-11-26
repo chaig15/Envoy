@@ -38,12 +38,17 @@ def get_provider(
     if provider == "anthropic":
         from envoy.llm.providers.anthropic import AnthropicProvider
 
-        return AnthropicProvider(model=model_name or "claude-sonnet-4-20250514")
+        api_key = settings.anthropic_api_key or os.environ.get("ANTHROPIC_API_KEY")
+        return AnthropicProvider(
+            model=model_name or "claude-sonnet-4-20250514",
+            api_key=api_key,
+        )
 
     elif provider == "openai":
         from envoy.llm.providers.openai import OpenAIProvider
 
-        return OpenAIProvider(model=model_name or "gpt-4o")
+        api_key = settings.openai_api_key or os.environ.get("OPENAI_API_KEY")
+        return OpenAIProvider(model=model_name or "gpt-4o", api_key=api_key)
 
     elif provider == "openai_responses":
         from envoy.llm.providers.openai_responses import OpenAIResponsesProvider
@@ -62,10 +67,11 @@ def get_provider(
     elif provider == "openrouter":
         from envoy.llm.providers.openai import OpenAIProvider
 
+        api_key = settings.openrouter_api_key or os.environ.get("OPENROUTER_API_KEY")
         return OpenAIProvider(
             model=model_name or "anthropic/claude-3.5-sonnet",
             base_url="https://openrouter.ai/api/v1",
-            api_key=os.environ.get("OPENROUTER_API_KEY"),
+            api_key=api_key,
         )
 
     elif provider == "vllm":

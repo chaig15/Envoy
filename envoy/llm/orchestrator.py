@@ -6,7 +6,7 @@ from typing import Any, Optional
 
 from envoy.db.models import User
 from envoy.db.queries import ConversationQueries, SnipeQueries, WatchQueries
-from envoy.llm.base import LLMProvider, LLMResponse, Message, ToolCall
+from envoy.llm.base import LLMProvider, Message, ToolCall
 from envoy.llm.providers import get_provider
 from envoy.llm.tools import SYSTEM_PROMPT, TOOLS
 from envoy.resy import ResyClient

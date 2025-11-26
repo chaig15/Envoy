@@ -11,13 +11,13 @@ logger = logging.getLogger(__name__)
 class AnthropicProvider(LLMProvider):
     """Provider for Anthropic Claude models."""
 
-    def __init__(self, model: str = "claude-sonnet-4-20250514"):
+    def __init__(self, model: str = "claude-sonnet-4-20250514", api_key: Optional[str] = None):
         try:
             import anthropic
         except ImportError:
             raise ImportError("anthropic package required. Run: uv add anthropic")
 
-        self.client = anthropic.AsyncAnthropic()
+        self.client = anthropic.AsyncAnthropic(api_key=api_key)
         self.model = model
 
     async def chat(

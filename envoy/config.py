@@ -30,6 +30,11 @@ class Settings(BaseSettings):
     llm_provider: str = "anthropic"  # anthropic, openai, ollama, openrouter, vllm
     llm_model: Optional[str] = None  # Override default model for provider
 
+    # LLM API keys (optional, provider-specific)
+    anthropic_api_key: Optional[str] = None
+    openai_api_key: Optional[str] = None
+    openrouter_api_key: Optional[str] = None
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

@@ -341,7 +341,11 @@ class ConversationQueries:
             telegram_id,
         )
         if row and row["messages"]:
-            return row["messages"]
+            messages = row["messages"]
+            # Handle case where messages might be stored as JSON string
+            if isinstance(messages, str):
+                messages = json.loads(messages)
+            return messages
         return []
 
     @staticmethod
@@ -356,12 +360,12 @@ class ConversationQueries:
         await Database.execute(
             """
             INSERT INTO conversations (telegram_id, messages, model, updated_at)
-            VALUES ($1, $2, $3, NOW())
+            VALUES ($1, $2::jsonb, $3, NOW())
             ON CONFLICT (telegram_id)
-            DO UPDATE SET messages = $2, model = COALESCE($3, conversations.model), updated_at = NOW()
+            DO UPDATE SET messages = $2::jsonb, model = COALESCE($3, conversations.model), updated_at = NOW()
             """,
             telegram_id,
-            json.dumps(messages),
+            json.dumps(messages),  # Serialize to JSON string, cast to jsonb
             model,
         )
 
