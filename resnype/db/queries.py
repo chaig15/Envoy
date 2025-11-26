@@ -1,11 +1,11 @@
 """Database query functions."""
 
+import json
 from datetime import date, time
 from typing import Optional
-import json
 
 from .connection import Database
-from .models import User, Watch, WatchGroup, Snipe
+from .models import Snipe, User, Watch, WatchGroup
 
 
 class UserQueries:
@@ -324,3 +324,70 @@ class SnipeQueries:
         if row:
             return Snipe.model_validate(dict(row))
         return None
+
+
+class ConversationQueries:
+    """Database operations for LLM conversation history."""
+
+    @staticmethod
+    async def load(telegram_id: int) -> list[dict]:
+        """
+        Load conversation history for a user.
+
+        Returns list of message dicts ready for LLM.
+        """
+        row = await Database.fetchrow(
+            "SELECT messages FROM conversations WHERE telegram_id = $1",
+            telegram_id,
+        )
+        if row and row["messages"]:
+            return row["messages"]
+        return []
+
+    @staticmethod
+    async def save(
+        telegram_id: int, messages: list[dict], model: Optional[str] = None
+    ) -> None:
+        """
+        Save conversation history for a user.
+
+        Uses upsert to create or update.
+        """
+        await Database.execute(
+            """
+            INSERT INTO conversations (telegram_id, messages, model, updated_at)
+            VALUES ($1, $2, $3, NOW())
+            ON CONFLICT (telegram_id)
+            DO UPDATE SET messages = $2, model = COALESCE($3, conversations.model), updated_at = NOW()
+            """,
+            telegram_id,
+            json.dumps(messages),
+            model,
+        )
+
+    @staticmethod
+    async def clear(telegram_id: int) -> None:
+        """Clear conversation history for a user."""
+        await Database.execute(
+            "DELETE FROM conversations WHERE telegram_id = $1",
+            telegram_id,
+        )
+
+    @staticmethod
+    async def cleanup_old(days: int = 7) -> int:
+        """
+        Delete conversations older than N days.
+
+        Returns number of deleted rows.
+        """
+        result = await Database.execute(
+            """
+            DELETE FROM conversations
+            WHERE updated_at < NOW() - INTERVAL '%s days'
+            """,
+            days,
+        )
+        # Parse "DELETE N" to get count
+        if result and result.startswith("DELETE"):
+            return int(result.split()[1])
+        return 0

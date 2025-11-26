@@ -1,0 +1,167 @@
+"""Unified tool definitions for LLM function calling."""
+
+# Tool definitions in unified format (Anthropic-style)
+# These get converted to provider-specific formats automatically
+
+TOOLS = [
+    {
+        "name": "search_restaurant",
+        "description": "Search for restaurants by name or description. Use this when the user mentions a restaurant they want to find.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "Restaurant name or search query (e.g., 'Carbone', 'Italian Greenwich Village')",
+                }
+            },
+            "required": ["query"],
+        },
+    },
+    {
+        "name": "create_snipe",
+        "description": "Set up an auto-book snipe for when new reservations are released. Use this when the user wants to book a restaurant at the exact moment reservations become available.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "venue_id": {
+                    "type": "integer",
+                    "description": "Restaurant venue ID (from search results)",
+                },
+                "venue_name": {
+                    "type": "string",
+                    "description": "Restaurant name for display",
+                },
+                "target_date": {
+                    "type": "string",
+                    "description": "Date user wants reservation FOR (YYYY-MM-DD)",
+                },
+                "party_size": {
+                    "type": "integer",
+                    "description": "Number of guests (1-20)",
+                },
+                "days_advance": {
+                    "type": "integer",
+                    "description": "How many days before target_date the restaurant releases reservations (e.g., 7, 14, 21, 30). Most popular spots are 14 days.",
+                },
+                "release_time": {
+                    "type": "string",
+                    "description": "Time when reservations open (HH:MM in 24h format, e.g., '09:00'). Default is 09:00 (9am EST).",
+                },
+            },
+            "required": [
+                "venue_id",
+                "venue_name",
+                "target_date",
+                "party_size",
+                "days_advance",
+            ],
+        },
+    },
+    {
+        "name": "create_watch",
+        "description": "Watch for cancellations on a specific date. Use this when the user wants to monitor for openings due to cancellations (not new releases).",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "venue_id": {
+                    "type": "integer",
+                    "description": "Restaurant venue ID (from search results)",
+                },
+                "venue_name": {
+                    "type": "string",
+                    "description": "Restaurant name for display",
+                },
+                "date": {
+                    "type": "string",
+                    "description": "Date to watch (YYYY-MM-DD)",
+                },
+                "party_size": {
+                    "type": "integer",
+                    "description": "Number of guests (1-20)",
+                },
+                "time_preference": {
+                    "type": "string",
+                    "enum": ["early", "prime", "late", "any"],
+                    "description": "Preferred time: 'early' (5-6:30pm), 'prime' (7-8pm), 'late' (9pm+), 'any' (no preference)",
+                },
+            },
+            "required": ["venue_id", "venue_name", "date", "party_size"],
+        },
+    },
+    {
+        "name": "list_snipes",
+        "description": "List the user's pending snipes. Use when user asks about their snipes or scheduled bookings.",
+        "input_schema": {
+            "type": "object",
+            "properties": {},
+        },
+    },
+    {
+        "name": "list_watches",
+        "description": "List the user's active watches. Use when user asks about their watches or what they're monitoring.",
+        "input_schema": {
+            "type": "object",
+            "properties": {},
+        },
+    },
+    {
+        "name": "cancel_snipe",
+        "description": "Cancel a pending snipe by ID.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "snipe_id": {
+                    "type": "integer",
+                    "description": "ID of the snipe to cancel",
+                }
+            },
+            "required": ["snipe_id"],
+        },
+    },
+    {
+        "name": "cancel_watch",
+        "description": "Cancel an active watch by ID.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "watch_id": {
+                    "type": "integer",
+                    "description": "ID of the watch to cancel",
+                }
+            },
+            "required": ["watch_id"],
+        },
+    },
+]
+
+SYSTEM_PROMPT = """You are Resnype, a reservation assistant that helps users book hard-to-get restaurant reservations.
+
+## Capabilities
+- Search for restaurants
+- Set up "snipes" to auto-book when new reservations are released
+- Set up "watches" to monitor for cancellations
+- List and cancel existing snipes/watches
+
+## Important Context
+- Most popular NYC restaurants release reservations 7-14 days in advance at 9am EST
+- "Snipe" = auto-book at release time (for new openings)
+- "Watch" = monitor for cancellations (for already-released dates)
+
+## Workflow
+1. When user mentions a restaurant, search for it first to get the venue_id
+2. Use that venue_id when creating snipes or watches
+3. Ask for clarification only if critical info is missing
+
+## Response Style
+- Be concise and helpful
+- After actions, confirm with emoji summaries:
+  🎯 Snipe: Carbone, Dec 5, 2 guests → runs Nov 21 at 9am
+  👀 Watch: Don Angie, Dec 10, 4 guests, prime time
+- If unsure about days_advance, suggest 14 days as default for popular spots
+
+## Examples
+- "Get me Carbone for 2 on Dec 15" → Search Carbone, then create_snipe
+- "Watch for cancellations at Don Angie Dec 20" → Search Don Angie, then create_watch
+- "What am I watching?" → list_watches
+"""

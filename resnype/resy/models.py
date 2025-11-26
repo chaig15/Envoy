@@ -1,7 +1,8 @@
 """Pydantic models for Resy API responses."""
 
-from datetime import datetime, date, time
+from datetime import date, datetime, time
 from typing import Optional
+
 from pydantic import BaseModel, Field
 
 
