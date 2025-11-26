@@ -5,10 +5,10 @@ import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, CommandHandler, CallbackQueryHandler
 
-from resnype.db.queries import UserQueries
-from resnype.resy import ResyClient
-from resnype.resy.client import ResyError
-from resnype.encryption import decrypt_token
+from envoy.db.queries import UserQueries
+from envoy.resy import ResyClient
+from envoy.resy.client import ResyError
+from envoy.encryption import decrypt_token
 
 logger = logging.getLogger(__name__)
 

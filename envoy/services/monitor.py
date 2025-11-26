@@ -6,13 +6,13 @@ from typing import Optional
 
 from telegram import Bot
 
-from resnype.config import get_settings
-from resnype.db.queries import WatchQueries
-from resnype.db.models import WatchGroup, Watch
-from resnype.resy import ResyClient
-from resnype.resy.client import ResyError
-from resnype.resy.models import TimeSlot
-from resnype.encryption import decrypt_token
+from envoy.config import get_settings
+from envoy.db.queries import WatchQueries
+from envoy.db.models import WatchGroup, Watch
+from envoy.resy import ResyClient
+from envoy.resy.client import ResyError
+from envoy.resy.models import TimeSlot
+from envoy.encryption import decrypt_token
 from .notifier import Notifier
 
 

@@ -2,7 +2,7 @@
 
 from cryptography.fernet import Fernet
 
-from resnype.config import get_settings
+from envoy.config import get_settings
 
 
 def get_fernet() -> Fernet:
