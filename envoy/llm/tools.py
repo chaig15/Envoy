@@ -48,6 +48,15 @@ TOOLS = [
                     "type": "string",
                     "description": "Time when reservations open (HH:MM in 24h format, e.g., '09:00'). Default is 09:00 (9am EST).",
                 },
+                "table_type": {
+                    "type": "string",
+                    "description": "Specific table/seating type to target (e.g., 'Dining Room', 'Bar', 'Patio', 'Butter Chicken', 'Tasting Menu'). If specified, only books slots matching this type. Case-insensitive partial match.",
+                },
+                "time_preference": {
+                    "type": "string",
+                    "enum": ["early", "prime", "late", "any"],
+                    "description": "Preferred reservation time: 'early' (5-6:30pm), 'prime' (7-8pm), 'late' (9pm+), 'any' (tries prime first, then any available). Default is 'any'.",
+                },
             },
             "required": [
                 "venue_id",

@@ -206,6 +206,9 @@ class SnipeQueries:
         party_size: int,
         release_time: Optional[time] = None,
         release_timezone: Optional[str] = None,
+        table_type: Optional[str] = None,
+        time_earliest: Optional[time] = None,
+        time_latest: Optional[time] = None,
     ) -> Snipe:
         """Create a new snipe."""
         # Use Python defaults to avoid SQL type casting issues
@@ -216,8 +219,8 @@ class SnipeQueries:
 
         row = await Database.fetchrow(
             """
-            INSERT INTO snipes (user_id, venue_id, venue_name, target_date, release_date, party_size, release_time, release_timezone)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            INSERT INTO snipes (user_id, venue_id, venue_name, target_date, release_date, party_size, release_time, release_timezone, table_type, time_earliest, time_latest)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
             RETURNING *
             """,
             user_id,
@@ -228,6 +231,9 @@ class SnipeQueries:
             party_size,
             release_time,
             release_timezone,
+            table_type,
+            time_earliest,
+            time_latest,
         )
         return Snipe.model_validate(dict(row))
 

@@ -271,6 +271,25 @@ class LLMOrchestrator:
                 f"Release date {release_date} has already passed. Cannot create snipe."
             )
 
+        # Get optional table type preference
+        table_type = args.get("table_type")
+
+        # Map time preference to actual times
+        time_pref = args.get("time_preference", "any")
+        time_earliest = None
+        time_latest = None
+
+        if time_pref == "early":
+            time_earliest = time(17, 0)
+            time_latest = time(18, 30)
+        elif time_pref == "prime":
+            time_earliest = time(19, 0)
+            time_latest = time(20, 0)
+        elif time_pref == "late":
+            time_earliest = time(21, 0)
+            time_latest = time(23, 0)
+        # "any" leaves both as None - sniper will try prime first, then any
+
         snipe = await SnipeQueries.create(
             user_id=user.id,
             venue_id=args["venue_id"],
@@ -279,15 +298,32 @@ class LLMOrchestrator:
             release_date=release_date,
             party_size=args["party_size"],
             release_time=release_time_obj,
+            table_type=table_type,
+            time_earliest=time_earliest,
+            time_latest=time_latest,
         )
 
-        return (
+        result = (
             f"Snipe created successfully!\n"
             f"- Venue: {snipe.venue_name}\n"
             f"- Target date: {snipe.target_date}\n"
             f"- Party size: {snipe.party_size}\n"
-            f"- Snipe runs: {snipe.release_date} at {release_time_obj.strftime('%H:%M')} EST"
         )
+        if table_type:
+            result += f"- Table type: {table_type}\n"
+
+        # Show time preference
+        time_pref_display = {
+            "early": "early (5-6:30pm)",
+            "prime": "prime (7-8pm)",
+            "late": "late (9pm+)",
+            "any": "any (prime preferred)",
+        }.get(time_pref, "any (prime preferred)")
+        result += f"- Time preference: {time_pref_display}\n"
+
+        result += f"- Snipe runs: {snipe.release_date} at {release_time_obj.strftime('%H:%M')} EST"
+
+        return result
 
     async def _create_watch(self, user: User, args: dict) -> str:
         """Create a watch."""
@@ -336,9 +372,15 @@ class LLMOrchestrator:
 
         results = []
         for s in snipes:
+            table_info = f" [{s.table_type}]" if s.table_type else ""
+            # Determine time preference display
+            if s.time_earliest and s.time_latest:
+                time_info = f", {s.time_earliest.strftime('%H:%M')}-{s.time_latest.strftime('%H:%M')}"
+            else:
+                time_info = ", any time"
             results.append(
-                f"- ID {s.id}: {s.venue_name}, {s.target_date}, "
-                f"{s.party_size} guests, runs {s.release_date} at {s.release_time.strftime('%H:%M')}"
+                f"- ID {s.id}: {s.venue_name}{table_info}, {s.target_date}, "
+                f"{s.party_size} guests{time_info}, runs {s.release_date} at {s.release_time.strftime('%H:%M')}"
             )
 
         return f"Pending snipes ({len(snipes)}):\n" + "\n".join(results)
