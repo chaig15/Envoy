@@ -67,7 +67,8 @@ class Snipe(BaseModel):
     user_id: int
     venue_id: int
     venue_name: str
-    target_date: date
+    target_date: date  # The date user wants the reservation FOR
+    release_date: date  # The date snipe should EXECUTE (when reservations open)
     party_size: int
     release_time: time = time(9, 0)  # Default 9am
     release_timezone: str = "America/New_York"
@@ -84,4 +85,3 @@ class Snipe(BaseModel):
 
     class Config:
         from_attributes = True
-

@@ -2,7 +2,7 @@
 
 import logging
 import re
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import (
@@ -19,7 +19,13 @@ from resnype.db.queries import SnipeQueries, UserQueries
 logger = logging.getLogger(__name__)
 
 # Conversation states
-SNIPE_DATE, SNIPE_PARTY_SIZE, SNIPE_RELEASE_TIME, SNIPE_CUSTOM_TIME = range(4)
+(
+    SNIPE_DATE,
+    SNIPE_PARTY_SIZE,
+    SNIPE_DAYS_ADVANCE,
+    SNIPE_RELEASE_TIME,
+    SNIPE_CUSTOM_TIME,
+) = range(5)
 
 
 async def snipe_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -103,17 +109,76 @@ async def snipe_date_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
 
 async def snipe_party_size(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Handle party size selection, then ask about release time."""
+    """Handle party size selection, then ask about days in advance."""
     query = update.callback_query
     await query.answer()
 
     _, size = query.data.split(":")
     context.user_data["snipe_party_size"] = int(size)
 
-    # Ask about release time
+    target_date = context.user_data["snipe_date"]
+
+    # Calculate common options (only show if release date would be today or future)
+    today = date.today()
+    keyboard = []
+
+    # Common advance booking windows
+    for days in [7, 14, 21, 30]:
+        release_date = target_date - timedelta(days=days)
+        if release_date >= today:
+            keyboard.append(
+                [
+                    InlineKeyboardButton(
+                        f"{days} days (releases {release_date.strftime('%b %d')})",
+                        callback_data=f"snipe_advance:{days}",
+                    )
+                ]
+            )
+
+    # Always offer "tomorrow" as release (today + 1)
+    if target_date > today:
+        days_until = (target_date - today).days
+        keyboard.append(
+            [
+                InlineKeyboardButton(
+                    f"Tomorrow at open ({days_until} days advance)",
+                    callback_data="snipe_advance:tomorrow",
+                )
+            ]
+        )
+
+    await query.edit_message_text(
+        f"👥 Party size: {size}\n\n"
+        "📆 How many days in advance does this restaurant release?\n\n"
+        "Most popular spots are 7-14 days. Check their Resy page if unsure.",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+    )
+    return SNIPE_DAYS_ADVANCE
+
+
+async def snipe_days_advance(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Handle days in advance selection."""
+    query = update.callback_query
+    await query.answer()
+
+    _, value = query.data.split(":")
+    target_date = context.user_data["snipe_date"]
+    today = date.today()
+
+    if value == "tomorrow":
+        release_date = today + timedelta(days=1)
+    else:
+        days = int(value)
+        release_date = target_date - timedelta(days=days)
+
+    context.user_data["snipe_release_date"] = release_date
+
+    # Now ask about release time
     keyboard = [
         [
-            InlineKeyboardButton("🕘 9:00 AM EST (default)", callback_data="snipe_time:default"),
+            InlineKeyboardButton(
+                "🕘 9:00 AM EST (default)", callback_data="snipe_time:default"
+            ),
         ],
         [
             InlineKeyboardButton("⏰ Custom time", callback_data="snipe_time:custom"),
@@ -121,9 +186,9 @@ async def snipe_party_size(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     ]
 
     await query.edit_message_text(
-        f"👥 Party size: {size}\n\n"
-        "⏰ When do reservations open?\n\n"
-        "Most restaurants release at 9:00 AM EST, but some differ.",
+        f"📆 Snipe will run on: {release_date.strftime('%A, %B %d')}\n\n"
+        "⏰ What time do reservations open?\n\n"
+        "Most restaurants release at 9:00 AM EST.",
         reply_markup=InlineKeyboardMarkup(keyboard),
     )
     return SNIPE_RELEASE_TIME
@@ -198,6 +263,7 @@ async def create_snipe(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     venue_id = context.user_data["watch_venue_id"]
     venue_name = context.user_data["watch_venue_name"]
     target_date = context.user_data["snipe_date"]
+    release_date = context.user_data["snipe_release_date"]
     party_size = context.user_data["snipe_party_size"]
     release_time = context.user_data["snipe_release_time"]
     release_timezone = context.user_data["snipe_release_timezone"]
@@ -208,6 +274,7 @@ async def create_snipe(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
         venue_id=venue_id,
         venue_name=venue_name,
         target_date=target_date,
+        release_date=release_date,
         party_size=party_size,
         release_time=release_time,
         release_timezone=release_timezone,
@@ -225,10 +292,10 @@ async def create_snipe(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     message = (
         f"🎯 **Snipe scheduled!**\n\n"
         f"🍽 {snipe.venue_name}\n"
-        f"📅 {snipe.target_date.strftime('%A, %B %d, %Y')}\n"
-        f"👥 {snipe.party_size} guests\n"
-        f"⏰ Release: {time_str}\n\n"
-        f"I'll auto-book the first available slot when reservations open!\n\n"
+        f"📅 Dinner: {snipe.target_date.strftime('%A, %B %d, %Y')}\n"
+        f"👥 {snipe.party_size} guests\n\n"
+        f"🚀 Snipe runs: {snipe.release_date.strftime('%b %d')} at {time_str}\n\n"
+        f"I'll auto-book the first available slot!\n\n"
         f"Use /snipes to view or cancel pending snipes."
     )
 
@@ -242,6 +309,7 @@ async def create_snipe(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
         "watch_venue_id",
         "watch_venue_name",
         "snipe_date",
+        "snipe_release_date",
         "snipe_party_size",
         "snipe_release_time",
         "snipe_release_timezone",
@@ -257,6 +325,7 @@ async def snipe_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
         "watch_venue_id",
         "watch_venue_name",
         "snipe_date",
+        "snipe_release_date",
         "snipe_party_size",
         "snipe_release_time",
         "snipe_release_timezone",
@@ -302,8 +371,8 @@ async def list_snipes(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
         text_parts.append(
             f"• **{snipe.venue_name}**\n"
-            f"  📅 {snipe.target_date.strftime('%b %d')} | "
-            f"👥 {snipe.party_size} | ⏰ {time_str} EST"
+            f"  📅 Dinner: {snipe.target_date.strftime('%b %d')} | 👥 {snipe.party_size}\n"
+            f"  🚀 Snipe: {snipe.release_date.strftime('%b %d')} at {time_str} EST"
         )
 
         keyboard.append(
@@ -355,6 +424,9 @@ def setup_snipe_handlers(application) -> None:
             SNIPE_PARTY_SIZE: [
                 CallbackQueryHandler(snipe_party_size, pattern=r"^snipe_party:")
             ],
+            SNIPE_DAYS_ADVANCE: [
+                CallbackQueryHandler(snipe_days_advance, pattern=r"^snipe_advance:")
+            ],
             SNIPE_RELEASE_TIME: [
                 CallbackQueryHandler(snipe_release_time, pattern=r"^snipe_time:")
             ],
@@ -370,4 +442,3 @@ def setup_snipe_handlers(application) -> None:
     application.add_handler(
         CallbackQueryHandler(cancel_snipe_callback, pattern=r"^cancel_snipe:")
     )
-

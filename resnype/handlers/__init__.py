@@ -13,4 +13,3 @@ __all__ = [
     "setup_snipe_handlers",
     "setup_watch_handlers",
 ]
-

@@ -67,17 +67,19 @@ class Notifier:
         # Create booking buttons - use slot index instead of full token
         keyboard = []
         for i, slot in enumerate(slots[:4]):  # Max 4 buttons
-            keyboard.append([
-                InlineKeyboardButton(
-                    f"📍 Book {slot.time_display}",
-                    callback_data=f"book:{watch.id}:{i}"
-                )
-            ])
+            keyboard.append(
+                [
+                    InlineKeyboardButton(
+                        f"📍 Book {slot.time_display}",
+                        callback_data=f"book:{watch.id}:{i}",
+                    )
+                ]
+            )
 
         # Add dismiss button
-        keyboard.append([
-            InlineKeyboardButton("✖️ Dismiss", callback_data=f"dismiss:{watch.id}")
-        ])
+        keyboard.append(
+            [InlineKeyboardButton("✖️ Dismiss", callback_data=f"dismiss:{watch.id}")]
+        )
 
         # Send the notification
         await self.bot.send_message(
@@ -86,4 +88,3 @@ class Notifier:
             parse_mode="Markdown",
             reply_markup=InlineKeyboardMarkup(keyboard),
         )
-

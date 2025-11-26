@@ -18,17 +18,14 @@ async def search(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     # Check if logged in
     user = await UserQueries.get_by_telegram_id(update.effective_user.id)
     if not user or not user.resy_token_encrypted:
-        await update.message.reply_text(
-            "Please /login first to search restaurants."
-        )
+        await update.message.reply_text("Please /login first to search restaurants.")
         return
 
     # Get search query from command args
     if not context.args:
         await update.message.reply_text(
-            "Please provide a restaurant name.\n"
-            "Usage: `/search carbone`",
-            parse_mode="Markdown"
+            "Please provide a restaurant name.\nUsage: `/search carbone`",
+            parse_mode="Markdown",
         )
         return
 
@@ -44,8 +41,7 @@ async def search(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
         if not venues:
             await status_msg.edit_text(
-                f"No restaurants found for '{query}'.\n"
-                "Try a different search term."
+                f"No restaurants found for '{query}'.\nTry a different search term."
             )
             return
 
@@ -57,23 +53,22 @@ async def search(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             location = venue.display_location
             price = "💰" * (venue.price_range or 1)
 
-            text_parts.append(
-                f"• **{venue.name}**\n"
-                f"  {location} {price}"
-            )
+            text_parts.append(f"• **{venue.name}**\n  {location} {price}")
 
             # Button to start watching this venue
-            keyboard.append([
-                InlineKeyboardButton(
-                    f"📍 {venue.name}",
-                    callback_data=f"venue:{venue.id}:{venue.name[:30]}"
-                )
-            ])
+            keyboard.append(
+                [
+                    InlineKeyboardButton(
+                        f"📍 {venue.name}",
+                        callback_data=f"venue:{venue.id}:{venue.name[:30]}",
+                    )
+                ]
+            )
 
         await status_msg.edit_text(
             "\n".join(text_parts) + "\n\n_Select a restaurant to watch:_",
             parse_mode="Markdown",
-            reply_markup=InlineKeyboardMarkup(keyboard)
+            reply_markup=InlineKeyboardMarkup(keyboard),
         )
 
     except ResyError as e:
@@ -104,14 +99,11 @@ async def venue_selected(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         "What date are you looking for?\n"
         "Enter in format: `YYYY-MM-DD` (e.g., `2024-12-25`)\n\n"
         "Or /cancel to stop.",
-        parse_mode="Markdown"
+        parse_mode="Markdown",
     )
 
 
 def setup_search_handlers(application) -> None:
     """Register search handlers with the application."""
     application.add_handler(CommandHandler("search", search))
-    application.add_handler(
-        CallbackQueryHandler(venue_selected, pattern=r"^venue:")
-    )
-
+    application.add_handler(CallbackQueryHandler(venue_selected, pattern=r"^venue:"))

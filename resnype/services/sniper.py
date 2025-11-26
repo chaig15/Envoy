@@ -2,7 +2,7 @@
 
 import asyncio
 import logging
-from datetime import datetime, time, timedelta
+from datetime import datetime
 from typing import Optional
 
 import pytz
@@ -181,7 +181,9 @@ class Sniper:
                 await self._snipe_success(snipe, result)
             else:
                 # Booking failed but we found a slot - could retry
-                await self._snipe_failed(snipe, result.error_message or "Booking failed")
+                await self._snipe_failed(
+                    snipe, result.error_message or "Booking failed"
+                )
 
         except Exception as e:
             logger.exception(f"Booking error: {e}")
@@ -234,4 +236,3 @@ class Sniper:
         )
 
         logger.warning(f"Snipe FAILED: {snipe.venue_name} - {error}")
-

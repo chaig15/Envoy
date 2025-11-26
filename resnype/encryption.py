@@ -21,4 +21,3 @@ def decrypt_token(encrypted: str) -> str:
     """Decrypt a stored token."""
     f = get_fernet()
     return f.decrypt(encrypted.encode()).decode()
-

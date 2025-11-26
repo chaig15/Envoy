@@ -202,6 +202,7 @@ class SnipeQueries:
         venue_id: int,
         venue_name: str,
         target_date: date,
+        release_date: date,
         party_size: int,
         release_time: Optional[time] = None,
         release_timezone: Optional[str] = None,
@@ -209,14 +210,15 @@ class SnipeQueries:
         """Create a new snipe."""
         row = await Database.fetchrow(
             """
-            INSERT INTO snipes (user_id, venue_id, venue_name, target_date, party_size, release_time, release_timezone)
-            VALUES ($1, $2, $3, $4, $5, COALESCE($6, '09:00'), COALESCE($7, 'America/New_York'))
+            INSERT INTO snipes (user_id, venue_id, venue_name, target_date, release_date, party_size, release_time, release_timezone)
+            VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7, '09:00'), COALESCE($8, 'America/New_York'))
             RETURNING *
             """,
             user_id,
             venue_id,
             venue_name,
             target_date,
+            release_date,
             party_size,
             release_time,
             release_timezone,
@@ -224,7 +226,9 @@ class SnipeQueries:
         return Snipe.model_validate(dict(row))
 
     @staticmethod
-    async def get_user_snipes(telegram_id: int, pending_only: bool = True) -> list[Snipe]:
+    async def get_user_snipes(
+        telegram_id: int, pending_only: bool = True
+    ) -> list[Snipe]:
         """Get all snipes for a user."""
         query = """
             SELECT s.*, u.telegram_id, u.resy_token_encrypted, u.resy_payment_method_id
@@ -243,7 +247,7 @@ class SnipeQueries:
     async def get_pending_snipes_due() -> list[Snipe]:
         """
         Get pending snipes that should execute soon.
-        Returns snipes where target_date is today (release happens today at release_time).
+        Returns snipes where release_date is today (reservations open today).
         """
         rows = await Database.fetch(
             """
@@ -251,7 +255,7 @@ class SnipeQueries:
             FROM snipes s
             JOIN users u ON s.user_id = u.id
             WHERE s.status = 'pending'
-              AND s.target_date = CURRENT_DATE
+              AND s.release_date = CURRENT_DATE
               AND u.resy_token_encrypted IS NOT NULL
             ORDER BY s.release_time
             """
