@@ -434,7 +434,11 @@ def setup_snipe_handlers(application) -> None:
                 MessageHandler(filters.TEXT & ~filters.COMMAND, snipe_custom_time)
             ],
         },
-        fallbacks=[CommandHandler("cancel", snipe_cancel)],
+        fallbacks=[
+            CommandHandler("cancel", snipe_cancel),
+            # Any other command exits the conversation
+            MessageHandler(filters.COMMAND, snipe_cancel),
+        ],
     )
 
     application.add_handler(snipe_conv)

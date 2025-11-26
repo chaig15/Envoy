@@ -153,6 +153,9 @@ def main() -> None:
 
 def main_dev() -> None:
     """Start the bot with hot reload for development."""
+    # Enable debug logging for development
+    os.environ["DEV"] = "1"
+
     try:
         from watchfiles import run_process
     except ImportError:

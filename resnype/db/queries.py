@@ -208,10 +208,16 @@ class SnipeQueries:
         release_timezone: Optional[str] = None,
     ) -> Snipe:
         """Create a new snipe."""
+        # Use Python defaults to avoid SQL type casting issues
+        if release_time is None:
+            release_time = time(9, 0)
+        if release_timezone is None:
+            release_timezone = "America/New_York"
+
         row = await Database.fetchrow(
             """
             INSERT INTO snipes (user_id, venue_id, venue_name, target_date, release_date, party_size, release_time, release_timezone)
-            VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7, '09:00'), COALESCE($8, 'America/New_York'))
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             RETURNING *
             """,
             user_id,
