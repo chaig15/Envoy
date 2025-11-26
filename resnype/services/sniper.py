@@ -73,7 +73,6 @@ class Sniper:
             return
 
         now = datetime.now(pytz.timezone("America/New_York"))
-        current_time = now.time()
 
         for snipe in snipes:
             # Calculate if this snipe should execute now

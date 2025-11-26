@@ -15,6 +15,7 @@ from resnype.db import Database
 from resnype.handlers import (
     setup_auth_handlers,
     setup_booking_handlers,
+    setup_llm_handler,
     setup_search_handlers,
     setup_snipe_handlers,
     setup_watch_handlers,
@@ -56,6 +57,15 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /help command."""
+    settings = get_settings()
+    llm_text = ""
+    if settings.llm_enabled:
+        llm_text = (
+            "\n**Natural Language Mode:** ✅ Enabled\n"
+            "Just type naturally! e.g., 'Get me Carbone for 2 on Dec 15'\n"
+            "/clear - Reset conversation context\n"
+        )
+
     await update.message.reply_text(
         "🍽 **Resnype Commands**\n\n"
         "/start - Welcome message\n"
@@ -67,7 +77,8 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         "/snipe - Auto-book at release time\n"
         "/snipes - View pending snipes\n"
         "/cancel - Cancel current operation\n"
-        "/help - Show this message\n\n"
+        "/help - Show this message\n"
+        f"{llm_text}\n"
         "**Watch vs Snipe:**\n"
         "• Watch = monitors for cancellations (ongoing)\n"
         "• Snipe = grabs new slots at 9am release (one-shot)",
@@ -145,6 +156,9 @@ def main() -> None:
     setup_watch_handlers(application)
     setup_snipe_handlers(application)
     setup_booking_handlers(application)
+
+    # LLM handler should be last (catch-all for natural language)
+    setup_llm_handler(application)
 
     # Run the bot
     logger.info("Starting Resnype bot...")
