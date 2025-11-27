@@ -316,6 +316,71 @@ class SnipeQueries:
         return result == "UPDATE 1"
 
     @staticmethod
+    async def update(
+        snipe_id: int,
+        telegram_id: int,
+        release_date: Optional[date] = None,
+        party_size: Optional[int] = None,
+        table_type: Optional[str] = None,
+        time_earliest: Optional[time] = None,
+        time_latest: Optional[time] = None,
+        release_time: Optional[time] = None,
+    ) -> Optional[Snipe]:
+        """
+        Update a pending snipe. Only updates fields that are provided.
+        Returns the updated snipe or None if not found/not authorized.
+        """
+        # Build dynamic update query
+        updates = []
+        params = [snipe_id, telegram_id]
+        param_idx = 3
+
+        if release_date is not None:
+            updates.append(f"release_date = ${param_idx}")
+            params.append(release_date)
+            param_idx += 1
+        if party_size is not None:
+            updates.append(f"party_size = ${param_idx}")
+            params.append(party_size)
+            param_idx += 1
+        if table_type is not None:
+            updates.append(f"table_type = ${param_idx}")
+            params.append(table_type)
+            param_idx += 1
+        if time_earliest is not None:
+            updates.append(f"time_earliest = ${param_idx}")
+            params.append(time_earliest)
+            param_idx += 1
+        if time_latest is not None:
+            updates.append(f"time_latest = ${param_idx}")
+            params.append(time_latest)
+            param_idx += 1
+        if release_time is not None:
+            updates.append(f"release_time = ${param_idx}")
+            params.append(release_time)
+            param_idx += 1
+
+        if not updates:
+            # Nothing to update, just return the existing snipe
+            return await SnipeQueries.get_by_id(snipe_id)
+
+        query = f"""
+            UPDATE snipes s
+            SET {', '.join(updates)}
+            FROM users u
+            WHERE s.user_id = u.id
+              AND s.id = $1
+              AND u.telegram_id = $2
+              AND s.status = 'pending'
+            RETURNING s.*, u.telegram_id, u.resy_token_encrypted, u.resy_payment_method_id
+        """
+
+        row = await Database.fetchrow(query, *params)
+        if row:
+            return Snipe.model_validate(dict(row))
+        return None
+
+    @staticmethod
     async def get_by_id(snipe_id: int) -> Optional[Snipe]:
         """Get a snipe by ID with user info."""
         row = await Database.fetchrow(

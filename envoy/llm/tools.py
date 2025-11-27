@@ -115,6 +115,41 @@ TOOLS = [
         },
     },
     {
+        "name": "update_snipe",
+        "description": "Update an existing pending snipe. Use this to change the release date, party size, time preference, or other details of a snipe.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "snipe_id": {
+                    "type": "integer",
+                    "description": "ID of the snipe to update",
+                },
+                "release_date": {
+                    "type": "string",
+                    "description": "New release date when snipe should run (YYYY-MM-DD). This is the date reservations open, NOT the target reservation date.",
+                },
+                "party_size": {
+                    "type": "integer",
+                    "description": "New party size (1-20)",
+                },
+                "table_type": {
+                    "type": "string",
+                    "description": "New table type to target (e.g., 'Dining Room', 'Bar', 'Butter Chicken')",
+                },
+                "time_preference": {
+                    "type": "string",
+                    "enum": ["early", "prime", "late", "any"],
+                    "description": "New time preference: 'early' (5-6:30pm), 'prime' (7-8pm), 'late' (9pm+), 'any'",
+                },
+                "release_time": {
+                    "type": "string",
+                    "description": "New release time (HH:MM in 24h format, e.g., '09:00')",
+                },
+            },
+            "required": ["snipe_id"],
+        },
+    },
+    {
         "name": "cancel_snipe",
         "description": "Cancel a pending snipe by ID.",
         "input_schema": {
@@ -150,12 +185,13 @@ SYSTEM_PROMPT = """You are Envoy, a personal AI agent that helps users book hard
 - Search for restaurants
 - Set up "snipes" to auto-book when new reservations are released
 - Set up "watches" to monitor for cancellations
-- List and cancel existing snipes/watches
+- List, update, and cancel existing snipes/watches
 
 ## Important Context
 - Most popular NYC restaurants release reservations 7-14 days in advance at 9am EST
 - "Snipe" = auto-book at release time (for new openings)
 - "Watch" = monitor for cancellations (for already-released dates)
+- When user specifies an exact release date (e.g., "reservations open Nov 27"), use update_snipe to set that exact date if the initial calculation was wrong
 
 ## Workflow
 1. When user mentions a restaurant, search for it first to get the venue_id

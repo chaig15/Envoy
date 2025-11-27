@@ -9,11 +9,11 @@ services:
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - DATABASE_URL=postgresql://envoy:envoy@postgres:5432/envoy
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
-      # LLM settings (optional)
-      - LLM_ENABLED=${LLM_ENABLED:-false}
-      - LLM_PROVIDER=${LLM_PROVIDER:-anthropic}
-      - LLM_MODEL=${LLM_MODEL:-}
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      # LLM settings
+      - LLM_ENABLED=true
+      - LLM_PROVIDER=anthropic
+      - LLM_MODEL=claude-haiku-4-5
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
       - DEEPINFRA_API_KEY=${DEEPINFRA_API_KEY:-}
