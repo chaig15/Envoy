@@ -8,7 +8,7 @@ from envoy.db.models import User
 from envoy.db.queries import ConversationQueries, SnipeQueries, WatchQueries
 from envoy.llm.base import LLMProvider, Message, ToolCall
 from envoy.llm.providers import get_provider
-from envoy.llm.tools import SYSTEM_PROMPT, TOOLS
+from envoy.llm.tools import TOOLS, build_system_prompt
 from envoy.resy import ResyClient
 
 logger = logging.getLogger(__name__)
@@ -141,6 +141,13 @@ class LLMOrchestrator:
         # Add user message
         history.append(Message(role="user", content=user_message))
 
+        # Build system prompt with current date context
+        today = date.today()
+        system_prompt = build_system_prompt(
+            current_date=today.strftime("%B %d, %Y"),
+            day_of_week=today.strftime("%A"),
+        )
+
         try:
             # Agentic loop: keep calling tools until LLM returns text-only response
             max_iterations = 10  # Safety limit
@@ -153,7 +160,7 @@ class LLMOrchestrator:
                 response = await self.provider.chat(
                     messages=_trim_history_safely(history, MAX_HISTORY),
                     tools=TOOLS,
-                    system=SYSTEM_PROMPT,
+                    system=system_prompt,
                 )
 
                 logger.debug(

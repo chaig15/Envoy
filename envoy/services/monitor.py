@@ -12,7 +12,6 @@ from envoy.db.models import WatchGroup, Watch
 from envoy.resy import ResyClient
 from envoy.resy.client import ResyError
 from envoy.resy.models import TimeSlot
-from envoy.encryption import decrypt_token
 from .notifier import Notifier
 
 
@@ -87,16 +86,14 @@ class AvailabilityMonitor:
         """
         async with self._semaphore:  # Rate limit
             try:
-                # Use the first watcher's token (they all should have tokens)
-                watch_with_token = next(
-                    (w for w in group.watches if w.resy_token_encrypted), None
-                )
-
-                if not watch_with_token:
+                # Skip groups where no watches have tokens (needed for booking later)
+                # But availability checking doesn't require auth
+                has_token = any(w.resy_token_encrypted for w in group.watches)
+                if not has_token:
                     return
 
-                token = decrypt_token(watch_with_token.resy_token_encrypted)
-                client = ResyClient(auth_token=token)
+                # get_availability() doesn't require authentication
+                client = ResyClient()
 
                 # Make ONE API call for the whole group
                 availability = await client.get_availability(

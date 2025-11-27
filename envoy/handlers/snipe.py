@@ -47,11 +47,42 @@ async def snipe_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
         )
         return ConversationHandler.END
 
+    # Generate example date
+    example_date = (date.today() + timedelta(days=14)).strftime("%Y-%m-%d")
+
     await update.message.reply_text(
-        f"🎯 **Setting up snipe for: {venue_name}**\n\n"
-        "What date do you want to snipe?\n"
-        "Enter as `YYYY-MM-DD` (e.g., `2025-01-15`)\n\n"
-        "I'll auto-book at 9:00 AM EST when reservations open!",
+        f"🎯 **Snipe: {venue_name}**\n\n"
+        "What date do you want to dine?\n\n"
+        f"Enter as `{example_date}`\n\n"
+        "I'll auto-book when reservations open!\n"
+        "Or /cancel to stop.",
+        parse_mode="Markdown",
+    )
+    return SNIPE_DATE
+
+
+async def snipe_from_search(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Entry point for snipe creation from search results (callback query)."""
+    query = update.callback_query
+    await query.answer()
+
+    # Check if logged in
+    user = await UserQueries.get_by_telegram_id(update.effective_user.id)
+    if not user or not user.resy_token_encrypted:
+        await query.edit_message_text("Please /login first.")
+        return ConversationHandler.END
+
+    venue_name = context.user_data.get("watch_venue_name", "Restaurant")
+
+    # Generate example date
+    example_date = (date.today() + timedelta(days=14)).strftime("%Y-%m-%d")
+
+    await query.edit_message_text(
+        f"🎯 **Snipe: {venue_name}**\n\n"
+        "What date do you want to dine?\n\n"
+        f"Enter as `{example_date}`\n\n"
+        "I'll auto-book when reservations open!\n"
+        "Or /cancel to stop.",
         parse_mode="Markdown",
     )
     return SNIPE_DATE
@@ -101,8 +132,10 @@ async def snipe_date_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         return SNIPE_PARTY_SIZE
 
     except ValueError:
+        # Generate concrete example date
+        example_date = (date.today() + timedelta(days=14)).strftime("%Y-%m-%d")
         await update.message.reply_text(
-            "Invalid date format. Please use `YYYY-MM-DD`:",
+            f"❌ Invalid date format.\n\nPlease use: `{example_date}`\n\nTry again:",
             parse_mode="Markdown",
         )
         return SNIPE_DATE
@@ -431,7 +464,11 @@ def setup_snipe_handlers(application) -> None:
 
     # Snipe creation conversation
     snipe_conv = ConversationHandler(
-        entry_points=[CommandHandler("snipe", snipe_start)],
+        entry_points=[
+            CommandHandler("snipe", snipe_start),
+            # Entry from search results → action:snipe button
+            CallbackQueryHandler(snipe_from_search, pattern=r"^action:snipe:"),
+        ],
         states={
             SNIPE_DATE: [
                 MessageHandler(filters.TEXT & ~filters.COMMAND, snipe_date_input)
