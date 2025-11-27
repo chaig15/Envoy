@@ -2,7 +2,7 @@
 
 import pytest
 from datetime import date, time, datetime, timedelta
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 from envoy.db.models import Snipe
 from envoy.resy.mock_client import MockResyClient, create_mock_slots

@@ -121,8 +121,14 @@ class AvailabilityMonitor:
         """
         Notify a user about available slots if they haven't been notified already.
 
-        Filters by time preference and tracks which slots have been notified.
+        Filters by time preference, table type, and tracks which slots have been notified.
         """
+        # Filter by table type first (if specified)
+        if watch.table_type:
+            slots = self._filter_by_table_type(slots, watch.table_type)
+            if not slots:
+                return
+
         # Filter by time preference
         filtered_slots = []
         for slot in slots:
@@ -157,3 +163,20 @@ class AvailabilityMonitor:
             )
         except Exception as e:
             logger.error(f"Failed to notify user {watch.telegram_id}: {e}")
+
+    @staticmethod
+    def _filter_by_table_type(slots: list[TimeSlot], table_type: str) -> list[TimeSlot]:
+        """
+        Filter slots by table type using case-insensitive partial matching.
+
+        Examples:
+            - "Butter Chicken" matches "Butter Chicken Experience"
+            - "bar" matches "Bar Seating"
+            - "dining" matches "Dining Room"
+        """
+        table_type_lower = table_type.lower()
+        return [
+            slot
+            for slot in slots
+            if slot.type and table_type_lower in slot.type.lower()
+        ]

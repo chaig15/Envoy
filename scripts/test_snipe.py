@@ -26,7 +26,7 @@ import argparse
 import asyncio
 import logging
 import sys
-from datetime import datetime, time
+from datetime import time
 from pathlib import Path
 from typing import Optional
 

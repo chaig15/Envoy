@@ -97,6 +97,10 @@ TOOLS = [
                     "enum": ["early", "prime", "late", "any"],
                     "description": "Preferred time: 'early' (5-6:30pm), 'prime' (7-8pm), 'late' (9pm+), 'any' (no preference)",
                 },
+                "table_type": {
+                    "type": "string",
+                    "description": "Specific table/seating type to watch for (e.g., 'Dining Room', 'Bar', 'Patio', 'Butter Chicken', 'Tasting Menu'). If specified, only notifies about slots matching this type. Case-insensitive partial match.",
+                },
             },
             "required": ["venue_id", "venue_name", "date", "party_size"],
         },
@@ -176,6 +180,33 @@ TOOLS = [
                     "type": "integer",
                     "description": "ID of the watch to cancel",
                 }
+            },
+            "required": ["watch_id"],
+        },
+    },
+    {
+        "name": "update_watch",
+        "description": "Update an existing active watch. Use this to change the party size, time preference, or table type of a watch.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "watch_id": {
+                    "type": "integer",
+                    "description": "ID of the watch to update",
+                },
+                "party_size": {
+                    "type": "integer",
+                    "description": "New party size (1-20)",
+                },
+                "table_type": {
+                    "type": "string",
+                    "description": "New table type to filter for (e.g., 'Dining Room', 'Bar', 'Butter Chicken'). Use empty string to remove filter.",
+                },
+                "time_preference": {
+                    "type": "string",
+                    "enum": ["early", "prime", "late", "any"],
+                    "description": "New time preference: 'early' (5-6:30pm), 'prime' (7-8pm), 'late' (9pm+), 'any'",
+                },
             },
             "required": ["watch_id"],
         },

@@ -272,6 +272,9 @@ class LLMOrchestrator:
             elif tool_name == "cancel_watch":
                 return await self._cancel_watch(arguments["watch_id"], telegram_id)
 
+            elif tool_name == "update_watch":
+                return await self._update_watch(arguments, telegram_id)
+
             else:
                 return f"Unknown tool: {tool_name}"
 
@@ -404,6 +407,9 @@ class LLMOrchestrator:
             time_earliest = time(21, 0)
             time_latest = time(23, 0)
 
+        # Get optional table type preference
+        table_type = args.get("table_type")
+
         watch = await WatchQueries.create(
             user_id=user.id,
             venue_id=args["venue_id"],
@@ -412,16 +418,20 @@ class LLMOrchestrator:
             party_size=args["party_size"],
             time_earliest=time_earliest,
             time_latest=time_latest,
+            table_type=table_type,
         )
 
         time_str = time_pref if time_pref != "any" else "any time"
-        return (
+        result = (
             f"Watch created successfully!\n"
             f"- Venue: {watch.venue_name}\n"
             f"- Date: {watch.date}\n"
             f"- Party size: {watch.party_size}\n"
             f"- Time preference: {time_str}"
         )
+        if table_type:
+            result += f"\n- Table type: {table_type}"
+        return result
 
     async def _list_snipes(self, telegram_id: int) -> str:
         """List user's snipes."""
@@ -457,8 +467,9 @@ class LLMOrchestrator:
             time_str = "any time"
             if w.time_earliest and w.time_latest:
                 time_str = f"{w.time_earliest.strftime('%H:%M')}-{w.time_latest.strftime('%H:%M')}"
+            table_info = f" [{w.table_type}]" if w.table_type else ""
             results.append(
-                f"- ID {w.id}: {w.venue_name}, {w.date}, {w.party_size} guests, {time_str}"
+                f"- ID {w.id}: {w.venue_name}{table_info}, {w.date}, {w.party_size} guests, {time_str}"
             )
 
         return f"Active watches ({len(watches)}):\n" + "\n".join(results)
@@ -546,6 +557,64 @@ class LLMOrchestrator:
         if success:
             return f"Watch {watch_id} cancelled."
         return f"Could not cancel watch {watch_id}. It may not exist."
+
+    async def _update_watch(self, args: dict, telegram_id: int) -> str:
+        """Update an existing watch."""
+        watch_id = args["watch_id"]
+
+        party_size = args.get("party_size")
+        table_type = args.get("table_type")
+
+        # Handle empty string as "clear table type"
+        clear_table_type = table_type == ""
+        if clear_table_type:
+            table_type = None
+
+        # Parse time preference
+        time_earliest = None
+        time_latest = None
+        time_pref = args.get("time_preference")
+        if time_pref == "early":
+            time_earliest = time(17, 0)
+            time_latest = time(18, 30)
+        elif time_pref == "prime":
+            time_earliest = time(19, 0)
+            time_latest = time(20, 0)
+        elif time_pref == "late":
+            time_earliest = time(21, 0)
+            time_latest = time(23, 0)
+        elif time_pref == "any":
+            # Explicitly set to None to clear any existing preference
+            time_earliest = time(0, 0)  # Use sentinel to indicate "clear"
+            time_latest = time(23, 59)
+
+        # Only pass time values if time_pref was specified
+        updated = await WatchQueries.update(
+            watch_id=watch_id,
+            telegram_id=telegram_id,
+            party_size=party_size,
+            table_type=table_type,
+            time_earliest=time_earliest if time_pref and time_pref != "any" else None,
+            time_latest=time_latest if time_pref and time_pref != "any" else None,
+            clear_table_type=clear_table_type,
+        )
+
+        if not updated:
+            return f"Could not update watch {watch_id}. It may not exist, be inactive, or you don't have permission."
+
+        # Build result message
+        result = f"Watch {watch_id} updated!\n"
+        result += f"- Venue: {updated.venue_name}\n"
+        result += f"- Date: {updated.date}\n"
+        result += f"- Party size: {updated.party_size}\n"
+        if updated.table_type:
+            result += f"- Table type: {updated.table_type}\n"
+        if updated.time_earliest and updated.time_latest:
+            result += f"- Time preference: {updated.time_earliest.strftime('%H:%M')}-{updated.time_latest.strftime('%H:%M')}"
+        else:
+            result += "- Time preference: any"
+
+        return result
 
     async def clear_history(self, telegram_id: int) -> None:
         """Clear conversation history for a user."""
