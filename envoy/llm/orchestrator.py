@@ -519,7 +519,7 @@ class LLMOrchestrator:
         if updated.time_earliest and updated.time_latest:
             result += f"- Time preference: {updated.time_earliest.strftime('%H:%M')}-{updated.time_latest.strftime('%H:%M')}\n"
         else:
-            result += f"- Time preference: any (prime preferred)\n"
+            result += "- Time preference: any (prime preferred)\n"
         result += f"- Snipe runs: {updated.release_date} at {updated.release_time.strftime('%H:%M')} EST"
 
         return result

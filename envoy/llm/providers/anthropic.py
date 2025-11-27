@@ -11,7 +11,9 @@ logger = logging.getLogger(__name__)
 class AnthropicProvider(LLMProvider):
     """Provider for Anthropic Claude models."""
 
-    def __init__(self, model: str = "claude-sonnet-4-20250514", api_key: Optional[str] = None):
+    def __init__(
+        self, model: str = "claude-sonnet-4-20250514", api_key: Optional[str] = None
+    ):
         try:
             import anthropic
         except ImportError:

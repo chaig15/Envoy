@@ -259,7 +259,9 @@ class Sniper:
         )
 
         # Notify user
-        table_type_info = f"\n🪑 Table type: {snipe.table_type}" if snipe.table_type else ""
+        table_type_info = (
+            f"\n🪑 Table type: {snipe.table_type}" if snipe.table_type else ""
+        )
         await self.bot.send_message(
             chat_id=snipe.telegram_id,
             text=(
@@ -275,9 +277,7 @@ class Sniper:
         logger.warning(f"Snipe FAILED: {snipe.venue_name} - {error}")
 
     @staticmethod
-    def _filter_by_table_type(
-        slots: list[TimeSlot], table_type: str
-    ) -> list[TimeSlot]:
+    def _filter_by_table_type(slots: list[TimeSlot], table_type: str) -> list[TimeSlot]:
         """
         Filter slots by table type using case-insensitive partial matching.
 
@@ -337,7 +337,7 @@ class Sniper:
 
         # "Any" time: try prime time first (7-8pm), then fall back to any
         prime_start = time(19, 0)  # 7pm
-        prime_end = time(20, 0)    # 8pm
+        prime_end = time(20, 0)  # 8pm
 
         prime_slots = cls._filter_by_time_range(slots, prime_start, prime_end)
         if prime_slots:

@@ -366,7 +366,7 @@ class SnipeQueries:
 
         query = f"""
             UPDATE snipes s
-            SET {', '.join(updates)}
+            SET {", ".join(updates)}
             FROM users u
             WHERE s.user_id = u.id
               AND s.id = $1
