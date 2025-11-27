@@ -18,10 +18,10 @@ _orchestrator: Optional["LLMOrchestrator"] = None  # noqa: F821
 def get_orchestrator():
     """Get or create the LLM orchestrator (lazy loaded)."""
     global _orchestrator
-    if _orchestrator is None:
-        from envoy.llm import LLMOrchestrator
+    # Always recreate to pick up config changes
+    from envoy.llm import LLMOrchestrator
 
-        _orchestrator = LLMOrchestrator()
+    _orchestrator = LLMOrchestrator()
     return _orchestrator
 
 
@@ -61,14 +61,23 @@ async def handle_natural_language(
 
     # Process through LLM
     orchestrator = get_orchestrator()
-    response = await orchestrator.handle_message(
-        telegram_id=update.effective_user.id,
-        user_message=update.message.text,
-        user=user,
-    )
+    try:
+        response = await orchestrator.handle_message(
+            telegram_id=update.effective_user.id,
+            user_message=update.message.text,
+            user=user,
+        )
 
-    # Send response
-    await update.message.reply_text(response, parse_mode="Markdown")
+        # Send response (try Markdown first, fall back to plain text on error)
+        try:
+            await update.message.reply_text(response, parse_mode="Markdown")
+        except Exception:
+            # If Markdown parsing fails, send as plain text
+            await update.message.reply_text(response)
+    except Exception as e:
+        logger.exception(f"Error handling LLM message: {e}")
+        # Send error as plain text (no Markdown to avoid parsing issues)
+        await update.message.reply_text(f"Sorry, something went wrong: {str(e)}")
 
 
 async def clear_context(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

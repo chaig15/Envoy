@@ -70,6 +70,9 @@ class Snipe(BaseModel):
     target_date: date  # The date user wants the reservation FOR
     release_date: date  # The date snipe should EXECUTE (when reservations open)
     party_size: int
+    table_type: Optional[str] = None  # "Dining Room", "Bar", "Butter Chicken", etc.
+    time_earliest: Optional[time] = None  # Preferred time window start
+    time_latest: Optional[time] = None  # Preferred time window end
     release_time: time = time(9, 0)  # Default 9am
     release_timezone: str = "America/New_York"
     status: str = "pending"  # pending, sniping, success, failed, cancelled

@@ -118,14 +118,26 @@ async def snipe_party_size(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
     target_date = context.user_data["snipe_date"]
 
-    # Calculate common options (only show if release date would be today or future)
+    # Calculate common options (only show if release date would be in the future)
     today = date.today()
+    tomorrow = today + timedelta(days=1)
     keyboard = []
 
-    # Common advance booking windows
+    # Common advance booking windows (inclusive - release day counts as day 1)
     for days in [7, 14, 21, 30]:
-        release_date = target_date - timedelta(days=days)
-        if release_date >= today:
+        release_date = target_date - timedelta(days=days - 1)
+        if release_date == today:
+            # Release is TODAY
+            keyboard.append(
+                [
+                    InlineKeyboardButton(
+                        f"Today at open ({days} days advance)",
+                        callback_data=f"snipe_advance:{days}",
+                    )
+                ]
+            )
+        elif release_date > today:
+            # Release is in the future
             keyboard.append(
                 [
                     InlineKeyboardButton(
@@ -135,17 +147,19 @@ async def snipe_party_size(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                 ]
             )
 
-    # Always offer "tomorrow" as release (today + 1)
-    if target_date > today:
-        days_until = (target_date - today).days
-        keyboard.append(
-            [
-                InlineKeyboardButton(
-                    f"Tomorrow at open ({days_until} days advance)",
-                    callback_data="snipe_advance:tomorrow",
-                )
-            ]
-        )
+    # Offer "tomorrow" option if it makes sense and isn't already covered
+    if target_date > tomorrow:
+        days_advance_tomorrow = (target_date - tomorrow).days
+        # Only show if this isn't already one of the standard options
+        if days_advance_tomorrow not in [7, 14, 21, 30]:
+            keyboard.append(
+                [
+                    InlineKeyboardButton(
+                        f"Tomorrow at open ({days_advance_tomorrow} days advance)",
+                        callback_data="snipe_advance:tomorrow",
+                    )
+                ]
+            )
 
     await query.edit_message_text(
         f"👥 Party size: {size}\n\n"
@@ -169,7 +183,8 @@ async def snipe_days_advance(update: Update, context: ContextTypes.DEFAULT_TYPE)
         release_date = today + timedelta(days=1)
     else:
         days = int(value)
-        release_date = target_date - timedelta(days=days)
+        # Inclusive counting: release day counts as day 1
+        release_date = target_date - timedelta(days=days - 1)
 
     context.user_data["snipe_release_date"] = release_date
 

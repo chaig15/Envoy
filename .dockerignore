@@ -31,3 +31,11 @@ dist/
 build/
 *.egg-info/
 
+# Git
+.git/
+.gitignore
+
+# Docker
+Dockerfile
+docker-compose.yml
+

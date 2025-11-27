@@ -2,7 +2,7 @@
 
 import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, time
 from typing import Optional
 
 import pytz
@@ -14,6 +14,7 @@ from envoy.db.queries import SnipeQueries
 from envoy.encryption import decrypt_token
 from envoy.resy import ResyClient
 from envoy.resy.client import ResyError
+from envoy.resy.models import TimeSlot
 
 logger = logging.getLogger(__name__)
 
@@ -143,13 +144,48 @@ class Sniper:
                     )
 
                     if availability.slots:
-                        # Found slots! Book immediately
-                        logger.info(
-                            f"Found {len(availability.slots)} slots for {snipe.venue_name}!"
-                        )
-                        await client.close()
-                        await self._book_slot(snipe, availability.slots[0].config_token)
-                        return
+                        # Filter by table type if specified
+                        matching_slots = availability.slots
+                        if snipe.table_type:
+                            matching_slots = self._filter_by_table_type(
+                                availability.slots, snipe.table_type
+                            )
+                            logger.info(
+                                f"Found {len(availability.slots)} total slots, "
+                                f"{len(matching_slots)} matching '{snipe.table_type}'"
+                            )
+
+                        if matching_slots:
+                            # Select best slot based on time preference
+                            best_slot = self._select_best_slot(
+                                matching_slots,
+                                snipe.time_earliest,
+                                snipe.time_latest,
+                            )
+
+                            if best_slot:
+                                logger.info(
+                                    f"Booking slot: {best_slot.type} at {best_slot.time}"
+                                )
+                                await client.close()
+                                await self._book_slot(snipe, best_slot.config_token)
+                                return
+                            else:
+                                # Slots exist but none in preferred time range
+                                logger.info(
+                                    f"No slots in preferred time range. "
+                                    f"Available times: {[s.time for s in matching_slots[:5]]}"
+                                )
+                        elif availability.slots and snipe.table_type:
+                            # Slots exist but none match the requested type
+                            # Log available types for debugging
+                            available_types = set(
+                                s.type for s in availability.slots if s.type
+                            )
+                            logger.info(
+                                f"No '{snipe.table_type}' slots found. "
+                                f"Available types: {available_types}"
+                            )
 
                 except ResyError as e:
                     logger.warning(f"API error during snipe: {e.message}")
@@ -198,11 +234,12 @@ class Sniper:
         )
 
         # Notify user
+        table_type_info = f"\n🪑 {snipe.table_type}" if snipe.table_type else ""
         await self.bot.send_message(
             chat_id=snipe.telegram_id,
             text=(
                 f"🎉 **Snipe Successful!**\n\n"
-                f"🍽 {snipe.venue_name}\n"
+                f"🍽 {snipe.venue_name}{table_type_info}\n"
                 f"📅 {result.date or snipe.target_date}\n"
                 f"⏰ {result.time or 'See Resy app'}\n"
                 f"👥 {result.party_size or snipe.party_size} guests\n\n"
@@ -222,12 +259,15 @@ class Sniper:
         )
 
         # Notify user
+        table_type_info = (
+            f"\n🪑 Table type: {snipe.table_type}" if snipe.table_type else ""
+        )
         await self.bot.send_message(
             chat_id=snipe.telegram_id,
             text=(
                 f"❌ **Snipe Failed**\n\n"
                 f"🍽 {snipe.venue_name}\n"
-                f"📅 {snipe.target_date}\n\n"
+                f"📅 {snipe.target_date}{table_type_info}\n\n"
                 f"Reason: {error}\n\n"
                 f"You can try setting up a /watch to catch cancellations."
             ),
@@ -235,3 +275,73 @@ class Sniper:
         )
 
         logger.warning(f"Snipe FAILED: {snipe.venue_name} - {error}")
+
+    @staticmethod
+    def _filter_by_table_type(slots: list[TimeSlot], table_type: str) -> list[TimeSlot]:
+        """
+        Filter slots by table type using case-insensitive partial matching.
+
+        Examples:
+            - "Butter Chicken" matches "Butter Chicken Experience"
+            - "bar" matches "Bar Seating"
+            - "dining" matches "Dining Room"
+        """
+        table_type_lower = table_type.lower()
+        return [
+            slot
+            for slot in slots
+            if slot.type and table_type_lower in slot.type.lower()
+        ]
+
+    @staticmethod
+    def _filter_by_time_range(
+        slots: list[TimeSlot],
+        earliest: Optional[time],
+        latest: Optional[time],
+    ) -> list[TimeSlot]:
+        """Filter slots to those within the given time range."""
+        if not earliest and not latest:
+            return slots
+
+        filtered = []
+        for slot in slots:
+            slot_time = slot.time_obj
+            if earliest and slot_time < earliest:
+                continue
+            if latest and slot_time > latest:
+                continue
+            filtered.append(slot)
+        return filtered
+
+    @classmethod
+    def _select_best_slot(
+        cls,
+        slots: list[TimeSlot],
+        time_earliest: Optional[time],
+        time_latest: Optional[time],
+    ) -> Optional[TimeSlot]:
+        """
+        Select the best slot based on time preference.
+
+        Strategy:
+        - If time range specified: return first slot in that range, or None
+        - If no time range ("any"): try prime time (7-8pm) first, then any available
+        """
+        if not slots:
+            return None
+
+        # If specific time range requested, filter strictly
+        if time_earliest and time_latest:
+            filtered = cls._filter_by_time_range(slots, time_earliest, time_latest)
+            return filtered[0] if filtered else None
+
+        # "Any" time: try prime time first (7-8pm), then fall back to any
+        prime_start = time(19, 0)  # 7pm
+        prime_end = time(20, 0)  # 8pm
+
+        prime_slots = cls._filter_by_time_range(slots, prime_start, prime_end)
+        if prime_slots:
+            return prime_slots[0]
+
+        # No prime slots available, return first available
+        return slots[0]

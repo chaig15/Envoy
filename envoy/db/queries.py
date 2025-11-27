@@ -206,6 +206,9 @@ class SnipeQueries:
         party_size: int,
         release_time: Optional[time] = None,
         release_timezone: Optional[str] = None,
+        table_type: Optional[str] = None,
+        time_earliest: Optional[time] = None,
+        time_latest: Optional[time] = None,
     ) -> Snipe:
         """Create a new snipe."""
         # Use Python defaults to avoid SQL type casting issues
@@ -216,8 +219,8 @@ class SnipeQueries:
 
         row = await Database.fetchrow(
             """
-            INSERT INTO snipes (user_id, venue_id, venue_name, target_date, release_date, party_size, release_time, release_timezone)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            INSERT INTO snipes (user_id, venue_id, venue_name, target_date, release_date, party_size, release_time, release_timezone, table_type, time_earliest, time_latest)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
             RETURNING *
             """,
             user_id,
@@ -228,6 +231,9 @@ class SnipeQueries:
             party_size,
             release_time,
             release_timezone,
+            table_type,
+            time_earliest,
+            time_latest,
         )
         return Snipe.model_validate(dict(row))
 
@@ -310,6 +316,71 @@ class SnipeQueries:
         return result == "UPDATE 1"
 
     @staticmethod
+    async def update(
+        snipe_id: int,
+        telegram_id: int,
+        release_date: Optional[date] = None,
+        party_size: Optional[int] = None,
+        table_type: Optional[str] = None,
+        time_earliest: Optional[time] = None,
+        time_latest: Optional[time] = None,
+        release_time: Optional[time] = None,
+    ) -> Optional[Snipe]:
+        """
+        Update a pending snipe. Only updates fields that are provided.
+        Returns the updated snipe or None if not found/not authorized.
+        """
+        # Build dynamic update query
+        updates = []
+        params = [snipe_id, telegram_id]
+        param_idx = 3
+
+        if release_date is not None:
+            updates.append(f"release_date = ${param_idx}")
+            params.append(release_date)
+            param_idx += 1
+        if party_size is not None:
+            updates.append(f"party_size = ${param_idx}")
+            params.append(party_size)
+            param_idx += 1
+        if table_type is not None:
+            updates.append(f"table_type = ${param_idx}")
+            params.append(table_type)
+            param_idx += 1
+        if time_earliest is not None:
+            updates.append(f"time_earliest = ${param_idx}")
+            params.append(time_earliest)
+            param_idx += 1
+        if time_latest is not None:
+            updates.append(f"time_latest = ${param_idx}")
+            params.append(time_latest)
+            param_idx += 1
+        if release_time is not None:
+            updates.append(f"release_time = ${param_idx}")
+            params.append(release_time)
+            param_idx += 1
+
+        if not updates:
+            # Nothing to update, just return the existing snipe
+            return await SnipeQueries.get_by_id(snipe_id)
+
+        query = f"""
+            UPDATE snipes s
+            SET {", ".join(updates)}
+            FROM users u
+            WHERE s.user_id = u.id
+              AND s.id = $1
+              AND u.telegram_id = $2
+              AND s.status = 'pending'
+            RETURNING s.*, u.telegram_id, u.resy_token_encrypted, u.resy_payment_method_id
+        """
+
+        row = await Database.fetchrow(query, *params)
+        if row:
+            return Snipe.model_validate(dict(row))
+        return None
+
+    @staticmethod
     async def get_by_id(snipe_id: int) -> Optional[Snipe]:
         """Get a snipe by ID with user info."""
         row = await Database.fetchrow(
@@ -341,7 +412,11 @@ class ConversationQueries:
             telegram_id,
         )
         if row and row["messages"]:
-            return row["messages"]
+            messages = row["messages"]
+            # Handle case where messages might be stored as JSON string
+            if isinstance(messages, str):
+                messages = json.loads(messages)
+            return messages
         return []
 
     @staticmethod
@@ -356,12 +431,12 @@ class ConversationQueries:
         await Database.execute(
             """
             INSERT INTO conversations (telegram_id, messages, model, updated_at)
-            VALUES ($1, $2, $3, NOW())
+            VALUES ($1, $2::jsonb, $3, NOW())
             ON CONFLICT (telegram_id)
-            DO UPDATE SET messages = $2, model = COALESCE($3, conversations.model), updated_at = NOW()
+            DO UPDATE SET messages = $2::jsonb, model = COALESCE($3, conversations.model), updated_at = NOW()
             """,
             telegram_id,
-            json.dumps(messages),
+            json.dumps(messages),  # Serialize to JSON string, cast to jsonb
             model,
         )
 

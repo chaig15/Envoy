@@ -6,7 +6,7 @@ from typing import Any, Optional
 
 from envoy.db.models import User
 from envoy.db.queries import ConversationQueries, SnipeQueries, WatchQueries
-from envoy.llm.base import LLMProvider, LLMResponse, Message, ToolCall
+from envoy.llm.base import LLMProvider, Message, ToolCall
 from envoy.llm.providers import get_provider
 from envoy.llm.tools import SYSTEM_PROMPT, TOOLS
 from envoy.resy import ResyClient
@@ -15,6 +15,48 @@ logger = logging.getLogger(__name__)
 
 # Max conversation history to keep per user
 MAX_HISTORY = 20
+
+
+def _trim_history_safely(messages: list, max_messages: int) -> list:
+    """
+    Trim conversation history while keeping tool_use/tool_result pairs together.
+
+    This prevents the API error where a tool_result references a tool_use
+    that was trimmed from history.
+    """
+    if len(messages) <= max_messages:
+        return messages
+
+    # Start with the most recent messages
+    trimmed = messages[-max_messages:]
+
+    # Check if first message is a tool result - if so, we need to include its tool_use
+    while trimmed and trimmed[0].role == "tool":
+        # Find the tool_call_id
+        tool_call_id = trimmed[0].tool_call_id
+        if not tool_call_id:
+            # No tool_call_id, just remove this orphaned tool result
+            trimmed = trimmed[1:]
+            continue
+
+        # Look for the corresponding assistant message with tool_calls in the original history
+        found_tool_use = False
+        for msg in trimmed:
+            if msg.role == "assistant" and msg.tool_calls:
+                for tc in msg.tool_calls:
+                    if tc.id == tool_call_id:
+                        found_tool_use = True
+                        break
+            if found_tool_use:
+                break
+
+        if not found_tool_use:
+            # Tool_use not in trimmed history, remove this orphaned tool result
+            trimmed = trimmed[1:]
+        else:
+            break
+
+    return trimmed
 
 
 class LLMOrchestrator:
@@ -100,21 +142,34 @@ class LLMOrchestrator:
         history.append(Message(role="user", content=user_message))
 
         try:
-            # Send to LLM
-            response = await self.provider.chat(
-                messages=history[-MAX_HISTORY:],
-                tools=TOOLS,
-                system=SYSTEM_PROMPT,
-            )
+            # Agentic loop: keep calling tools until LLM returns text-only response
+            max_iterations = 10  # Safety limit
+            iteration = 0
 
-            logger.debug(
-                f"LLM response: finish_reason={response.finish_reason}, "
-                f"tool_calls={len(response.tool_calls)}, "
-                f"usage={response.usage}"
-            )
+            while iteration < max_iterations:
+                iteration += 1
 
-            # Handle tool calls if any
-            if response.tool_calls:
+                # Send to LLM (safely trim to avoid orphaned tool results)
+                response = await self.provider.chat(
+                    messages=_trim_history_safely(history, MAX_HISTORY),
+                    tools=TOOLS,
+                    system=SYSTEM_PROMPT,
+                )
+
+                logger.debug(
+                    f"LLM response (iter {iteration}): finish_reason={response.finish_reason}, "
+                    f"tool_calls={len(response.tool_calls)}, "
+                    f"usage={response.usage}"
+                )
+
+                # If no tool calls, we're done
+                if not response.tool_calls:
+                    final_text = (
+                        response.content or "I'm not sure how to help with that."
+                    )
+                    history.append(Message(role="assistant", content=final_text))
+                    break
+
                 # Add assistant message with tool calls to history
                 history.append(
                     Message(
@@ -124,8 +179,7 @@ class LLMOrchestrator:
                     )
                 )
 
-                # Execute tools and collect results
-                tool_results = []
+                # Execute all tool calls
                 for tool_call in response.tool_calls:
                     result = await self._execute_tool(
                         tool_call.name,
@@ -133,7 +187,6 @@ class LLMOrchestrator:
                         user,
                         telegram_id,
                     )
-                    tool_results.append((tool_call, result))
 
                     # Add tool result to history
                     history.append(
@@ -144,24 +197,15 @@ class LLMOrchestrator:
                         )
                     )
 
-                # Get final response after tool execution
-                final_response = await self.provider.chat(
-                    messages=history[-MAX_HISTORY:],
-                    tools=TOOLS,
-                    system=SYSTEM_PROMPT,
-                )
-
-                # Add final assistant response to history
-                final_text = final_response.content or "Done!"
-                history.append(Message(role="assistant", content=final_text))
-
             else:
-                # No tool calls, just a text response
-                final_text = response.content or "I'm not sure how to help with that."
+                # Hit max iterations
+                final_text = (
+                    "I got stuck in a loop. Please try again with a simpler request."
+                )
                 history.append(Message(role="assistant", content=final_text))
 
-            # Save history to DB (keep last MAX_HISTORY messages)
-            trimmed_history = history[-MAX_HISTORY:]
+            # Save history to DB (keep last MAX_HISTORY messages, safely trimmed)
+            trimmed_history = _trim_history_safely(history, MAX_HISTORY)
             model_name = getattr(self.provider, "model", None)
             await ConversationQueries.save(
                 telegram_id,
@@ -212,6 +256,9 @@ class LLMOrchestrator:
             elif tool_name == "list_watches":
                 return await self._list_watches(telegram_id)
 
+            elif tool_name == "update_snipe":
+                return await self._update_snipe(arguments, telegram_id)
+
             elif tool_name == "cancel_snipe":
                 return await self._cancel_snipe(arguments["snipe_id"], telegram_id)
 
@@ -229,15 +276,17 @@ class LLMOrchestrator:
         """Search for restaurants."""
         client = ResyClient()
         try:
-            venues = await client.search_venues(query, limit=5)
+            venues = await client.search_venues(query)
+            venues = venues[:5]  # Limit results
 
             if not venues:
                 return f"No restaurants found for '{query}'"
 
             results = []
             for v in venues:
+                location = v.display_location or "Unknown area"
                 results.append(
-                    f"- {v.name} (ID: {v.id}): {v.neighborhood or 'Unknown area'}, "
+                    f"- {v.name} (ID: {v.id}): {location}, "
                     f"{v.cuisine or 'Restaurant'}, ${v.price_range or '?'} price range"
                 )
 
@@ -249,8 +298,17 @@ class LLMOrchestrator:
     async def _create_snipe(self, user: User, args: dict) -> str:
         """Create a snipe."""
         target_date = date.fromisoformat(args["target_date"])
-        days_advance = args["days_advance"]
-        release_date = target_date - timedelta(days=days_advance)
+
+        # Determine release date: explicit release_date takes precedence over days_advance
+        if "release_date" in args and args["release_date"]:
+            release_date = date.fromisoformat(args["release_date"])
+        elif "days_advance" in args:
+            days_advance = args["days_advance"]
+            # Intuitive counting: "6 days before Dec 3" = Nov 27
+            release_date = target_date - timedelta(days=days_advance)
+        else:
+            # Default to 14 days advance for popular spots
+            release_date = target_date - timedelta(days=14)
 
         # Parse release time
         release_time_str = args.get("release_time", "09:00")
@@ -266,6 +324,25 @@ class LLMOrchestrator:
                 f"Release date {release_date} has already passed. Cannot create snipe."
             )
 
+        # Get optional table type preference
+        table_type = args.get("table_type")
+
+        # Map time preference to actual times
+        time_pref = args.get("time_preference", "any")
+        time_earliest = None
+        time_latest = None
+
+        if time_pref == "early":
+            time_earliest = time(17, 0)
+            time_latest = time(18, 30)
+        elif time_pref == "prime":
+            time_earliest = time(19, 0)
+            time_latest = time(20, 0)
+        elif time_pref == "late":
+            time_earliest = time(21, 0)
+            time_latest = time(23, 0)
+        # "any" leaves both as None - sniper will try prime first, then any
+
         snipe = await SnipeQueries.create(
             user_id=user.id,
             venue_id=args["venue_id"],
@@ -274,15 +351,32 @@ class LLMOrchestrator:
             release_date=release_date,
             party_size=args["party_size"],
             release_time=release_time_obj,
+            table_type=table_type,
+            time_earliest=time_earliest,
+            time_latest=time_latest,
         )
 
-        return (
+        result = (
             f"Snipe created successfully!\n"
             f"- Venue: {snipe.venue_name}\n"
             f"- Target date: {snipe.target_date}\n"
             f"- Party size: {snipe.party_size}\n"
-            f"- Snipe runs: {snipe.release_date} at {release_time_obj.strftime('%H:%M')} EST"
         )
+        if table_type:
+            result += f"- Table type: {table_type}\n"
+
+        # Show time preference
+        time_pref_display = {
+            "early": "early (5-6:30pm)",
+            "prime": "prime (7-8pm)",
+            "late": "late (9pm+)",
+            "any": "any (prime preferred)",
+        }.get(time_pref, "any (prime preferred)")
+        result += f"- Time preference: {time_pref_display}\n"
+
+        result += f"- Snipe runs: {snipe.release_date} at {release_time_obj.strftime('%H:%M')} EST"
+
+        return result
 
     async def _create_watch(self, user: User, args: dict) -> str:
         """Create a watch."""
@@ -331,9 +425,15 @@ class LLMOrchestrator:
 
         results = []
         for s in snipes:
+            table_info = f" [{s.table_type}]" if s.table_type else ""
+            # Determine time preference display
+            if s.time_earliest and s.time_latest:
+                time_info = f", {s.time_earliest.strftime('%H:%M')}-{s.time_latest.strftime('%H:%M')}"
+            else:
+                time_info = ", any time"
             results.append(
-                f"- ID {s.id}: {s.venue_name}, {s.target_date}, "
-                f"{s.party_size} guests, runs {s.release_date} at {s.release_time.strftime('%H:%M')}"
+                f"- ID {s.id}: {s.venue_name}{table_info}, {s.target_date}, "
+                f"{s.party_size} guests{time_info}, runs {s.release_date} at {s.release_time.strftime('%H:%M')}"
             )
 
         return f"Pending snipes ({len(snipes)}):\n" + "\n".join(results)
@@ -355,6 +455,74 @@ class LLMOrchestrator:
             )
 
         return f"Active watches ({len(watches)}):\n" + "\n".join(results)
+
+    async def _update_snipe(self, args: dict, telegram_id: int) -> str:
+        """Update an existing snipe."""
+        snipe_id = args["snipe_id"]
+
+        # Parse optional fields
+        release_date_val = None
+        if "release_date" in args:
+            release_date_val = date.fromisoformat(args["release_date"])
+
+        party_size = args.get("party_size")
+        table_type = args.get("table_type")
+
+        # Parse time preference
+        time_earliest = None
+        time_latest = None
+        time_pref = args.get("time_preference")
+        if time_pref == "early":
+            time_earliest = time(17, 0)
+            time_latest = time(18, 30)
+        elif time_pref == "prime":
+            time_earliest = time(19, 0)
+            time_latest = time(20, 0)
+        elif time_pref == "late":
+            time_earliest = time(21, 0)
+            time_latest = time(23, 0)
+        elif time_pref == "any":
+            # Explicitly set to None to clear any existing preference
+            time_earliest = None
+            time_latest = None
+
+        # Parse release time
+        release_time_val = None
+        if "release_time" in args:
+            try:
+                hour, minute = map(int, args["release_time"].split(":"))
+                release_time_val = time(hour, minute)
+            except (ValueError, AttributeError):
+                pass
+
+        updated = await SnipeQueries.update(
+            snipe_id=snipe_id,
+            telegram_id=telegram_id,
+            release_date=release_date_val,
+            party_size=party_size,
+            table_type=table_type,
+            time_earliest=time_earliest if time_pref else None,
+            time_latest=time_latest if time_pref else None,
+            release_time=release_time_val,
+        )
+
+        if not updated:
+            return f"Could not update snipe {snipe_id}. It may not exist, already executed, or you don't have permission."
+
+        # Build result message
+        result = f"Snipe {snipe_id} updated!\n"
+        result += f"- Venue: {updated.venue_name}\n"
+        result += f"- Target date: {updated.target_date}\n"
+        result += f"- Party size: {updated.party_size}\n"
+        if updated.table_type:
+            result += f"- Table type: {updated.table_type}\n"
+        if updated.time_earliest and updated.time_latest:
+            result += f"- Time preference: {updated.time_earliest.strftime('%H:%M')}-{updated.time_latest.strftime('%H:%M')}\n"
+        else:
+            result += "- Time preference: any (prime preferred)\n"
+        result += f"- Snipe runs: {updated.release_date} at {updated.release_time.strftime('%H:%M')} EST"
+
+        return result
 
     async def _cancel_snipe(self, snipe_id: int, telegram_id: int) -> str:
         """Cancel a snipe."""

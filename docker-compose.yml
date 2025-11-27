@@ -1,41 +1,52 @@
 services:
-  bot:
+  app:
     build: .
     restart: unless-stopped
     depends_on:
-      db:
+      postgres:
         condition: service_healthy
     environment:
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
-      - DATABASE_URL=postgresql://resnype:resnype@db:5432/resnype
+      - DATABASE_URL=postgresql://envoy:envoy@postgres:5432/envoy
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      # LLM settings
+      - LLM_ENABLED=true
+      - LLM_PROVIDER=anthropic
+      - LLM_MODEL=claude-haiku-4-5
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      - DEEPINFRA_API_KEY=${DEEPINFRA_API_KEY:-}
+      # Monitoring settings (optional)
+      - CHECK_INTERVAL_SECONDS=${CHECK_INTERVAL_SECONDS:-30}
+      - MAX_CONCURRENT_CHECKS=${MAX_CONCURRENT_CHECKS:-5}
     networks:
-      - resnype-network
+      - envoy-network
 
-  db:
+  postgres:
     image: postgres:16-alpine
     restart: unless-stopped
     ports:
       - "5432:5432"  # Expose PostgreSQL to host for local tools
     environment:
-      - POSTGRES_USER=resnype
-      - POSTGRES_PASSWORD=resnype
-      - POSTGRES_DB=resnype
+      - POSTGRES_USER=envoy
+      - POSTGRES_PASSWORD=envoy
+      - POSTGRES_DB=envoy
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./migrations:/docker-entrypoint-initdb.d
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U resnype"]
+      test: ["CMD-SHELL", "pg_isready -U envoy"]
       interval: 5s
       timeout: 5s
       retries: 5
     networks:
-      - resnype-network
+      - envoy-network
 
 volumes:
   postgres_data:
 
 networks:
-  resnype-network:
+  envoy-network:
     driver: bridge
 
