@@ -44,6 +44,33 @@ async def handle_natural_language(
     if update.message.text.startswith("/"):
         return
 
+    # Skip if user is in an active conversation flow
+    # ConversationHandler has higher priority (group 0) than LLM handler (group 100),
+    # so ConversationHandler will process messages first. This check is a safety measure.
+    #
+    # Note: If user types natural language mid-conversation (e.g., "get me carbone for 2"),
+    # ConversationHandler will process it first and show an error. LLM handler won't get it
+    # because ConversationHandler consumed the update. But we check here just in case.
+    active_conversation_keys = [
+        "resy_phone",  # Login flow - cleared after completion
+        "resy_challenge_id",  # Login flow - cleared after completion
+        "resy_claim_token",  # Login flow - cleared after completion
+        "watch_dates",  # Watch flow - only set during active watch creation
+        "watch_party_size",  # Watch flow - only set during active watch creation
+        "snipe_date",  # Snipe flow - set after user enters date
+        "snipe_party_size",  # Snipe flow - only set during active snipe creation
+        "snipe_release_date",  # Snipe flow - only set during active snipe creation
+        "snipe_release_time",  # Snipe flow - only set during active snipe creation
+        "snipe_release_timezone",  # Snipe flow - only set during active snipe creation
+    ]
+
+    # Check for active conversation state
+    # Note: watch_venue_id persists after search, so we don't check it alone
+    # If user is in SNIPE_DATE state but hasn't entered date yet, ConversationHandler
+    # will still process the message first (higher priority), so this is just a safety check
+    if any(key in context.user_data for key in active_conversation_keys):
+        return  # Let conversation handlers process this message
+
     # Get user from database
     user = await UserQueries.get_by_telegram_id(update.effective_user.id)
     if not user:
