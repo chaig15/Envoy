@@ -42,7 +42,11 @@ TOOLS = [
                 },
                 "days_advance": {
                     "type": "integer",
-                    "description": "How many days before target_date the restaurant releases reservations (e.g., 7, 14, 21, 30). Most popular spots are 14 days.",
+                    "description": "How many days before target_date the restaurant releases reservations (e.g., 7, 14, 21, 30). Most popular spots are 14 days. Example: 6 days before Dec 3 = Nov 27.",
+                },
+                "release_date": {
+                    "type": "string",
+                    "description": "Explicit release date when snipe should run (YYYY-MM-DD). Use this instead of days_advance when user specifies an exact date. Takes precedence over days_advance if both provided.",
                 },
                 "release_time": {
                     "type": "string",
@@ -63,7 +67,6 @@ TOOLS = [
                 "venue_name",
                 "target_date",
                 "party_size",
-                "days_advance",
             ],
         },
     },
@@ -191,7 +194,8 @@ SYSTEM_PROMPT = """You are Envoy, a personal AI agent that helps users book hard
 - Most popular NYC restaurants release reservations 7-14 days in advance at 9am EST
 - "Snipe" = auto-book at release time (for new openings)
 - "Watch" = monitor for cancellations (for already-released dates)
-- When user specifies an exact release date (e.g., "reservations open Nov 27"), use update_snipe to set that exact date if the initial calculation was wrong
+- days_advance uses intuitive counting: "6 days before Dec 3" = Nov 27 (Dec 3 minus 6 days)
+- When user specifies an exact release date (e.g., "reservations open Nov 27"), use the release_date parameter directly instead of days_advance
 
 ## Workflow
 1. When user mentions a restaurant, search for it first to get the venue_id

@@ -298,9 +298,17 @@ class LLMOrchestrator:
     async def _create_snipe(self, user: User, args: dict) -> str:
         """Create a snipe."""
         target_date = date.fromisoformat(args["target_date"])
-        days_advance = args["days_advance"]
-        # Inclusive counting: release day counts as day 1
-        release_date = target_date - timedelta(days=days_advance - 1)
+
+        # Determine release date: explicit release_date takes precedence over days_advance
+        if "release_date" in args and args["release_date"]:
+            release_date = date.fromisoformat(args["release_date"])
+        elif "days_advance" in args:
+            days_advance = args["days_advance"]
+            # Intuitive counting: "6 days before Dec 3" = Nov 27
+            release_date = target_date - timedelta(days=days_advance)
+        else:
+            # Default to 14 days advance for popular spots
+            release_date = target_date - timedelta(days=14)
 
         # Parse release time
         release_time_str = args.get("release_time", "09:00")
