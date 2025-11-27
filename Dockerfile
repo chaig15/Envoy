@@ -15,5 +15,5 @@ RUN uv sync --frozen --no-dev
 COPY . .
 
 # Run the bot
-CMD ["uv", "run", "python", "-m", "resnype.main"]
+CMD ["uv", "run", "python", "-m", "envoy.main"]
 
