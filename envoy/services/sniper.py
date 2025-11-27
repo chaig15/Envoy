@@ -23,20 +23,27 @@ class Sniper:
     """
     Service that executes scheduled snipes at release time.
 
-    Checks every minute for snipes due soon, then hammers the API
-    at the exact release time to grab the first available slot.
+    Uses adaptive scheduling: checks more frequently as release time approaches,
+    then hammers the API at the exact release time to grab the first available slot.
     """
 
     # Sniping parameters
     SNIPE_DURATION_SECONDS = 60  # How long to try
     REQUESTS_PER_SECOND = 3  # Rate during sniping
-    PRE_SNIPE_SECONDS = 5  # Start polling before release time
+    PRE_SNIPE_SECONDS = 30  # Start snipe task early to pre-warm connection
+    PRE_WARM_SECONDS = 25  # Warm connection this many seconds before release
+
+    # Adaptive scheduler intervals (in seconds)
+    INTERVAL_IDLE = 30  # No snipes soon
+    INTERVAL_ALERT = 5  # Snipe within 2 minutes
+    INTERVAL_ACTIVE = 1  # Snipe within 30 seconds
 
     def __init__(self, bot: Bot):
         self.bot = bot
         self.settings = get_settings()
         self._running = False
         self._task: Optional[asyncio.Task] = None
+        self._triggered_snipes: set[int] = set()  # Track triggered snipe IDs to avoid double-firing
 
     def start(self) -> None:
         """Start the sniper scheduler."""
@@ -55,28 +62,44 @@ class Sniper:
         logger.info("Sniper service stopped")
 
     async def _scheduler_loop(self) -> None:
-        """Main scheduler loop - checks every minute for due snipes."""
+        """
+        Main scheduler loop with adaptive interval.
+
+        Checks more frequently as release time approaches:
+        - 30s when idle (no snipes within 2 min)
+        - 5s when a snipe is within 2 minutes
+        - 1s when a snipe is within 30 seconds
+        """
         while self._running:
             try:
-                await self._check_due_snipes()
+                next_interval = await self._check_due_snipes()
             except Exception as e:
                 logger.error(f"Error in sniper scheduler: {e}")
+                next_interval = self.INTERVAL_IDLE
 
-            # Check every 30 seconds
-            await asyncio.sleep(30)
+            await asyncio.sleep(next_interval)
 
-    async def _check_due_snipes(self) -> None:
-        """Find and execute snipes that are due now."""
+    async def _check_due_snipes(self) -> int:
+        """
+        Find and execute snipes that are due now.
+
+        Returns the recommended interval (in seconds) until next check.
+        """
         # Get snipes scheduled for today
         snipes = await SnipeQueries.get_pending_snipes_due()
 
         if not snipes:
-            return
+            return self.INTERVAL_IDLE
 
         now = datetime.now(pytz.timezone("America/New_York"))
+        soonest_seconds = float("inf")
 
         for snipe in snipes:
-            # Calculate if this snipe should execute now
+            # Skip if we've already triggered this snipe
+            if snipe.id in self._triggered_snipes:
+                continue
+
+            # Calculate release datetime
             release_time = snipe.release_time
             release_datetime = now.replace(
                 hour=release_time.hour,
@@ -94,21 +117,67 @@ class Sniper:
                     f"Starting snipe for {snipe.venue_name} "
                     f"(release in {time_until:.0f}s)"
                 )
+                # Mark as triggered to prevent double-firing
+                self._triggered_snipes.add(snipe.id)
                 # Run snipe in background task
                 asyncio.create_task(self._execute_snipe(snipe, release_datetime))
+            elif time_until > self.PRE_SNIPE_SECONDS:
+                # Track soonest upcoming snipe for interval calculation
+                soonest_seconds = min(soonest_seconds, time_until)
+
+        return self._calculate_interval(soonest_seconds)
+
+    def _calculate_interval(self, seconds_until_snipe: float) -> int:
+        """
+        Calculate the next scheduler check interval based on snipe proximity.
+
+        - > 2 minutes away: check every 30s (IDLE)
+        - 30s - 2 minutes away: check every 5s (ALERT)
+        - < 30s away: check every 1s (ACTIVE)
+        """
+        if seconds_until_snipe <= 30:
+            return self.INTERVAL_ACTIVE
+        elif seconds_until_snipe <= 120:
+            return self.INTERVAL_ALERT
+        else:
+            return self.INTERVAL_IDLE
 
     async def _execute_snipe(self, snipe: Snipe, release_datetime: datetime) -> None:
         """
         Execute a single snipe.
 
-        1. Wait until just before release time
-        2. Start polling availability aggressively
-        3. Book immediately when slots found
-        4. Notify user of result
+        1. Pre-warm HTTP connection
+        2. Wait until just before release time
+        3. Start polling availability aggressively
+        4. Book immediately when slots found
+        5. Notify user of result
         """
         try:
             # Mark as sniping
             await SnipeQueries.update_status(snipe.id, "sniping")
+
+            now = datetime.now(pytz.timezone("America/New_York"))
+            seconds_until_release = (release_datetime - now).total_seconds()
+
+            # Create client early to pre-warm the connection
+            client = ResyClient()  # No auth needed for availability
+
+            # Pre-warm: make a request to establish TCP/TLS connection
+            if seconds_until_release > self.PRE_WARM_SECONDS:
+                logger.info(
+                    f"Pre-warming connection for {snipe.venue_name} "
+                    f"({seconds_until_release:.0f}s until release)"
+                )
+                try:
+                    # Lightweight availability check to warm connection
+                    await client.get_availability(
+                        venue_id=snipe.venue_id,
+                        check_date=snipe.target_date,
+                        party_size=snipe.party_size,
+                    )
+                    logger.info("Connection pre-warmed successfully")
+                except Exception as e:
+                    logger.warning(f"Pre-warm request failed (non-fatal): {e}")
 
             # Wait until release time (minus a tiny bit)
             now = datetime.now(pytz.timezone("America/New_York"))
@@ -123,8 +192,7 @@ class Sniper:
             start_time = asyncio.get_event_loop().time()
             request_interval = 1.0 / self.REQUESTS_PER_SECOND
 
-            client = ResyClient()  # No auth needed for availability
-
+            # Use the pre-warmed client for aggressive polling
             while True:
                 elapsed = asyncio.get_event_loop().time() - start_time
 

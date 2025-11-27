@@ -182,7 +182,10 @@ TOOLS = [
     },
 ]
 
-SYSTEM_PROMPT = """You are Envoy, a personal AI agent that helps users book hard-to-get restaurant reservations.
+SYSTEM_PROMPT_TEMPLATE = """You are Envoy, a personal AI agent that helps users book hard-to-get restaurant reservations.
+
+## Current Date
+Today is {current_date} ({day_of_week}).
 
 ## Capabilities
 - Search for restaurants
@@ -196,11 +199,13 @@ SYSTEM_PROMPT = """You are Envoy, a personal AI agent that helps users book hard
 - "Watch" = monitor for cancellations (for already-released dates)
 - days_advance uses intuitive counting: "6 days before Dec 3" = Nov 27 (Dec 3 minus 6 days)
 - When user specifies an exact release date (e.g., "reservations open Nov 27"), use the release_date parameter directly instead of days_advance
+- Default party size is 2 if not specified
 
 ## Workflow
 1. When user mentions a restaurant, search for it first to get the venue_id
 2. Use that venue_id when creating snipes or watches
-3. Ask for clarification only if critical info is missing
+3. Ask for clarification only if critical info is missing (e.g., which restaurant if ambiguous)
+4. Use sensible defaults: party size 2, time preference "any", 14 days advance
 
 ## Response Style
 - Be concise and helpful
@@ -215,3 +220,18 @@ SYSTEM_PROMPT = """You are Envoy, a personal AI agent that helps users book hard
 - "Watch for cancellations at Don Angie Dec 20" → Search Don Angie, then create_watch
 - "What am I watching?" → list_watches
 """
+
+
+def build_system_prompt(current_date: str, day_of_week: str) -> str:
+    """Build the system prompt with current date context."""
+    return SYSTEM_PROMPT_TEMPLATE.format(
+        current_date=current_date,
+        day_of_week=day_of_week,
+    )
+
+
+# Legacy: keep for backwards compatibility if imported directly
+SYSTEM_PROMPT = SYSTEM_PROMPT_TEMPLATE.format(
+    current_date="unknown",
+    day_of_week="unknown",
+)

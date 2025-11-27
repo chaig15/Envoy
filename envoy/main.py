@@ -86,6 +86,13 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     )
 
 
+async def cancel_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle /cancel command when not in a conversation flow."""
+    await update.message.reply_text(
+        "No active operation to cancel.\nUse /help to see available commands."
+    )
+
+
 async def post_init(application: Application) -> None:
     """Run after the application is initialized."""
     # Connect to database
@@ -93,15 +100,22 @@ async def post_init(application: Application) -> None:
     logger.info("Database connected")
 
     # Set bot commands for the menu
+    settings = get_settings()
     commands = [
         BotCommand("start", "Welcome message"),
         BotCommand("login", "Connect your Resy account"),
         BotCommand("logout", "Disconnect Resy account"),
         BotCommand("search", "Search for restaurants"),
+        BotCommand("watch", "Watch for cancellations"),
         BotCommand("watches", "View your active watches"),
+        BotCommand("snipe", "Auto-book at release time"),
         BotCommand("snipes", "View pending snipes"),
+        BotCommand("cancel", "Cancel current operation"),
         BotCommand("help", "Show help message"),
     ]
+    # Add /clear command if LLM is enabled
+    if settings.llm_enabled:
+        commands.insert(-1, BotCommand("clear", "Clear conversation context"))
     await application.bot.set_my_commands(commands)
 
     # Start availability monitor
@@ -156,6 +170,9 @@ def main() -> None:
     setup_watch_handlers(application)
     setup_snipe_handlers(application)
     setup_booking_handlers(application)
+
+    # Global /cancel handler (low priority - conversation handlers catch it first)
+    application.add_handler(CommandHandler("cancel", cancel_command), group=99)
 
     # LLM handler should be last (catch-all for natural language)
     setup_llm_handler(application)

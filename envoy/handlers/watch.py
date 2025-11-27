@@ -38,11 +38,42 @@ async def watch_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
         )
         return ConversationHandler.END
 
+    # Generate example date
+    example_date = (date.today() + timedelta(days=14)).strftime("%Y-%m-%d")
+
     await update.message.reply_text(
-        f"📅 **Creating watch for: {venue_name}**\n\n"
+        f"👀 **Watch: {venue_name}**\n\n"
         "What date(s) are you looking for?\n\n"
-        "Single date: `2024-12-25`\n"
-        "Date range: `2024-12-25 to 2024-12-30`",
+        f"Single date: `{example_date}`\n"
+        f"Date range: `{example_date} to {(date.today() + timedelta(days=19)).strftime('%Y-%m-%d')}`\n\n"
+        "Or /cancel to stop.",
+        parse_mode="Markdown",
+    )
+    return WATCH_DATE
+
+
+async def watch_from_search(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Entry point for watch creation from search results (callback query)."""
+    query = update.callback_query
+    await query.answer()
+
+    # Check if logged in
+    user = await UserQueries.get_by_telegram_id(update.effective_user.id)
+    if not user or not user.resy_token_encrypted:
+        await query.edit_message_text("Please /login first.")
+        return ConversationHandler.END
+
+    venue_name = context.user_data.get("watch_venue_name", "Restaurant")
+
+    # Generate example date
+    example_date = (date.today() + timedelta(days=14)).strftime("%Y-%m-%d")
+
+    await query.edit_message_text(
+        f"👀 **Watch: {venue_name}**\n\n"
+        "What date(s) are you looking for?\n\n"
+        f"Single date: `{example_date}`\n"
+        f"Date range: `{example_date} to {(date.today() + timedelta(days=19)).strftime('%Y-%m-%d')}`\n\n"
+        "Or /cancel to stop.",
         parse_mode="Markdown",
     )
     return WATCH_DATE
@@ -101,10 +132,14 @@ async def watch_date_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     dates = parse_date_input(text)
 
     if dates is None:
+        # Generate concrete example dates
+        example_date = (date.today() + timedelta(days=14)).strftime("%Y-%m-%d")
+        example_end = (date.today() + timedelta(days=19)).strftime("%Y-%m-%d")
         await update.message.reply_text(
-            "Invalid date format.\n\n"
-            "Single date: `YYYY-MM-DD`\n"
-            "Date range: `YYYY-MM-DD to YYYY-MM-DD` (max 14 days)",
+            "❌ Invalid date format.\n\n"
+            f"Single date: `{example_date}`\n"
+            f"Date range: `{example_date} to {example_end}` (max 14 days)\n\n"
+            "Please try again:",
             parse_mode="Markdown",
         )
         return WATCH_DATE
@@ -335,6 +370,8 @@ def setup_watch_handlers(application) -> None:
     watch_conv = ConversationHandler(
         entry_points=[
             CommandHandler("watch", watch_start),
+            # Entry from search results → action:watch button
+            CallbackQueryHandler(watch_from_search, pattern=r"^action:watch:"),
         ],
         states={
             WATCH_DATE: [

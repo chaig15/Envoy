@@ -2,25 +2,17 @@
 
 import logging
 
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ContextTypes, CommandHandler, CallbackQueryHandler
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram.ext import CallbackQueryHandler, CommandHandler, ContextTypes
 
-from envoy.db.queries import UserQueries
 from envoy.resy import ResyClient
 from envoy.resy.client import ResyError
-from envoy.encryption import decrypt_token
 
 logger = logging.getLogger(__name__)
 
 
 async def search(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /search command."""
-    # Check if logged in
-    user = await UserQueries.get_by_telegram_id(update.effective_user.id)
-    if not user or not user.resy_token_encrypted:
-        await update.message.reply_text("Please /login first to search restaurants.")
-        return
-
     # Get search query from command args
     if not context.args:
         await update.message.reply_text(
@@ -32,9 +24,8 @@ async def search(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = " ".join(context.args)
     status_msg = await update.message.reply_text(f"🔍 Searching for '{query}'...")
 
-    # Decrypt token and search
-    token = decrypt_token(user.resy_token_encrypted)
-    client = ResyClient(auth_token=token)
+    # Search doesn't require authentication - use client without token
+    client = ResyClient()
 
     try:
         venues = await client.search_venues(query)
@@ -66,7 +57,7 @@ async def search(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             )
 
         await status_msg.edit_text(
-            "\n".join(text_parts) + "\n\n_Select a restaurant to watch:_",
+            "\n".join(text_parts) + "\n\n_Select a restaurant:_",
             parse_mode="Markdown",
             reply_markup=InlineKeyboardMarkup(keyboard),
         )
@@ -81,7 +72,7 @@ async def search(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def venue_selected(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle venue selection from search results."""
+    """Handle venue selection from search results - show Watch vs Snipe options."""
     query = update.callback_query
     await query.answer()
 
@@ -89,17 +80,33 @@ async def venue_selected(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     _, venue_id, venue_name = query.data.split(":", 2)
     venue_id = int(venue_id)
 
-    # Store in user context for watch creation
+    # Store in user context for watch/snipe creation
     context.user_data["watch_venue_id"] = venue_id
     context.user_data["watch_venue_name"] = venue_name
 
-    # Prompt for date
+    # Show Watch vs Snipe choice
+    keyboard = [
+        [
+            InlineKeyboardButton(
+                "👀 Watch for cancellations",
+                callback_data=f"action:watch:{venue_id}",
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                "🎯 Snipe at release time",
+                callback_data=f"action:snipe:{venue_id}",
+            )
+        ],
+    ]
+
     await query.edit_message_text(
-        f"📅 **Watching: {venue_name}**\n\n"
-        "What date are you looking for?\n"
-        "Enter in format: `YYYY-MM-DD` (e.g., `2024-12-25`)\n\n"
-        "Or /cancel to stop.",
+        f"**{venue_name}**\n\n"
+        "What would you like to do?\n\n"
+        "👀 **Watch** - Monitor for cancellations on already-released dates\n"
+        "🎯 **Snipe** - Auto-book when new reservations open (e.g., 9am release)",
         parse_mode="Markdown",
+        reply_markup=InlineKeyboardMarkup(keyboard),
     )
 
 
@@ -107,3 +114,5 @@ def setup_search_handlers(application) -> None:
     """Register search handlers with the application."""
     application.add_handler(CommandHandler("search", search))
     application.add_handler(CallbackQueryHandler(venue_selected, pattern=r"^venue:"))
+    # Note: action:watch: and action:snipe: callbacks are handled by
+    # ConversationHandler entry points in watch.py and snipe.py
