@@ -16,7 +16,7 @@ from telegram.ext import (
 from envoy.db.queries import UserQueries, WatchQueries
 
 # Conversation states for watch creation
-WATCH_DATE, WATCH_PARTY_SIZE, WATCH_TIME_PREF = range(3)
+WATCH_DATE, WATCH_PARTY_SIZE, WATCH_TIME_PREF, WATCH_TABLE_TYPE = range(4)
 
 
 async def watch_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -209,7 +209,7 @@ async def watch_party_size(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
 
 async def watch_time_pref(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Handle time preference and create the watch(es)."""
+    """Handle time preference, then ask about table type."""
     query = update.callback_query
     await query.answer()
 
@@ -224,6 +224,74 @@ async def watch_time_pref(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         time_earliest = datetime.strptime(start, "%H:%M").time()
         time_latest = datetime.strptime(end, "%H:%M").time()
 
+    context.user_data["watch_time_earliest"] = time_earliest
+    context.user_data["watch_time_latest"] = time_latest
+
+    # Ask about table type
+    keyboard = [
+        [
+            InlineKeyboardButton("🪑 Any table", callback_data="table_type:any"),
+        ],
+        [
+            InlineKeyboardButton(
+                "✏️ Specific type...", callback_data="table_type:custom"
+            ),
+        ],
+    ]
+
+    await query.edit_message_text(
+        "🪑 Filter by table/experience type?\n\n"
+        "Examples: `Dining Room`, `Bar`, `Patio`, `Butter Chicken`, `Tasting Menu`\n\n"
+        "Choose 'Any table' to see all available slots.",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode="Markdown",
+    )
+    return WATCH_TABLE_TYPE
+
+
+async def watch_table_type(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Handle table type selection via button."""
+    query = update.callback_query
+    await query.answer()
+
+    _, choice = query.data.split(":", 1)
+
+    if choice == "any":
+        context.user_data["watch_table_type"] = None
+        return await create_watch(update, context)
+    else:
+        # Ask for custom table type
+        await query.edit_message_text(
+            "Enter the table/experience type to filter for:\n\n"
+            "Examples:\n"
+            "• `Butter Chicken`\n"
+            "• `Bar`\n"
+            "• `Dining Room`\n"
+            "• `Tasting Menu`\n\n"
+            "This uses partial matching (e.g. 'bar' matches 'Bar Seating').",
+            parse_mode="Markdown",
+        )
+        return WATCH_TABLE_TYPE
+
+
+async def watch_table_type_input(
+    update: Update, context: ContextTypes.DEFAULT_TYPE
+) -> int:
+    """Handle custom table type text input."""
+    text = update.message.text.strip()
+
+    if len(text) > 100:
+        await update.message.reply_text(
+            "Table type is too long (max 100 characters). Please try again:"
+        )
+        return WATCH_TABLE_TYPE
+
+    context.user_data["watch_table_type"] = text
+    return await create_watch(update, context)
+
+
+async def create_watch(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Create the watch(es) after all info collected."""
     # Get user
     user = await UserQueries.get_by_telegram_id(update.effective_user.id)
 
@@ -232,6 +300,9 @@ async def watch_time_pref(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     venue_id = context.user_data["watch_venue_id"]
     venue_name = context.user_data["watch_venue_name"]
     party_size = context.user_data["watch_party_size"]
+    time_earliest = context.user_data.get("watch_time_earliest")
+    time_latest = context.user_data.get("watch_time_latest")
+    table_type = context.user_data.get("watch_table_type")
 
     # Create a watch for each date
     watches_created = []
@@ -244,6 +315,7 @@ async def watch_time_pref(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             party_size=party_size,
             time_earliest=time_earliest,
             time_latest=time_latest,
+            table_type=table_type,
         )
         watches_created.append(watch)
 
@@ -254,21 +326,27 @@ async def watch_time_pref(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             f"{time_earliest.strftime('%I:%M %p')} - {time_latest.strftime('%I:%M %p')}"
         )
 
+    table_type_str = f"\n🪑 {table_type}" if table_type else ""
+
     if len(watches_created) == 1:
         watch = watches_created[0]
         date_str = watch.date.strftime("%A, %B %d, %Y")
     else:
         date_str = f"{dates[0].strftime('%b %d')} - {dates[-1].strftime('%b %d')} ({len(dates)} days)"
 
-    await query.edit_message_text(
+    message = (
         f"✅ **{'Watch' if len(watches_created) == 1 else f'{len(watches_created)} Watches'} created!**\n\n"
         f"🍽 {venue_name}\n"
         f"📅 {date_str}\n"
         f"👥 {party_size} guests\n"
-        f"⏰ {time_str}\n\n"
-        f"I'll notify you when a table becomes available!",
-        parse_mode="Markdown",
+        f"⏰ {time_str}{table_type_str}\n\n"
+        f"I'll notify you when a table becomes available!"
     )
+
+    if update.callback_query:
+        await update.callback_query.edit_message_text(message, parse_mode="Markdown")
+    else:
+        await update.message.reply_text(message, parse_mode="Markdown")
 
     # Clear context
     for key in [
@@ -276,6 +354,9 @@ async def watch_time_pref(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         "watch_venue_name",
         "watch_dates",
         "watch_party_size",
+        "watch_time_earliest",
+        "watch_time_latest",
+        "watch_table_type",
     ]:
         context.user_data.pop(key, None)
 
@@ -289,6 +370,9 @@ async def watch_cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
         "watch_venue_name",
         "watch_dates",
         "watch_party_size",
+        "watch_time_earliest",
+        "watch_time_latest",
+        "watch_table_type",
     ]:
         context.user_data.pop(key, None)
 
@@ -324,9 +408,11 @@ async def list_watches(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         if watch.time_earliest and watch.time_latest:
             time_str = f"{watch.time_earliest.strftime('%I:%M%p')}-{watch.time_latest.strftime('%I:%M%p')}"
 
+        table_type_str = f" | 🪑 {watch.table_type}" if watch.table_type else ""
+
         text_parts.append(
             f"• **{watch.venue_name}**\n"
-            f"  📅 {watch.date.strftime('%b %d')} | 👥 {watch.party_size} | ⏰ {time_str}"
+            f"  📅 {watch.date.strftime('%b %d')} | 👥 {watch.party_size} | ⏰ {time_str}{table_type_str}"
         )
 
         keyboard.append(
@@ -381,6 +467,10 @@ def setup_watch_handlers(application) -> None:
                 CallbackQueryHandler(watch_party_size, pattern=r"^party:")
             ],
             WATCH_TIME_PREF: [CallbackQueryHandler(watch_time_pref, pattern=r"^time:")],
+            WATCH_TABLE_TYPE: [
+                CallbackQueryHandler(watch_table_type, pattern=r"^table_type:"),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, watch_table_type_input),
+            ],
         },
         fallbacks=[
             CommandHandler("cancel", watch_cancel),

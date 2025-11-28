@@ -76,12 +76,13 @@ class WatchQueries:
         party_size: int,
         time_earliest: Optional[time] = None,
         time_latest: Optional[time] = None,
+        table_type: Optional[str] = None,
     ) -> Watch:
         """Create a new watch."""
         row = await Database.fetchrow(
             """
-            INSERT INTO watches (user_id, venue_id, venue_name, date, party_size, time_earliest, time_latest)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            INSERT INTO watches (user_id, venue_id, venue_name, date, party_size, time_earliest, time_latest, table_type)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             RETURNING *
             """,
             user_id,
@@ -91,6 +92,7 @@ class WatchQueries:
             party_size,
             time_earliest,
             time_latest,
+            table_type,
         )
         return Watch.model_validate(dict(row))
 
@@ -188,6 +190,66 @@ class WatchQueries:
             """,
             watch_id,
         )
+        if row:
+            return Watch.model_validate(dict(row))
+        return None
+
+    @staticmethod
+    async def update(
+        watch_id: int,
+        telegram_id: int,
+        party_size: Optional[int] = None,
+        table_type: Optional[str] = None,
+        time_earliest: Optional[time] = None,
+        time_latest: Optional[time] = None,
+        clear_table_type: bool = False,
+    ) -> Optional[Watch]:
+        """
+        Update an active watch. Only updates fields that are provided.
+        Returns the updated watch or None if not found/not authorized.
+
+        Use clear_table_type=True to explicitly remove the table_type filter.
+        """
+        # Build dynamic update query
+        updates = []
+        params = [watch_id, telegram_id]
+        param_idx = 3
+
+        if party_size is not None:
+            updates.append(f"party_size = ${param_idx}")
+            params.append(party_size)
+            param_idx += 1
+        if table_type is not None:
+            updates.append(f"table_type = ${param_idx}")
+            params.append(table_type)
+            param_idx += 1
+        elif clear_table_type:
+            updates.append("table_type = NULL")
+        if time_earliest is not None:
+            updates.append(f"time_earliest = ${param_idx}")
+            params.append(time_earliest)
+            param_idx += 1
+        if time_latest is not None:
+            updates.append(f"time_latest = ${param_idx}")
+            params.append(time_latest)
+            param_idx += 1
+
+        if not updates:
+            # Nothing to update, just return the existing watch
+            return await WatchQueries.get_by_id(watch_id)
+
+        query = f"""
+            UPDATE watches w
+            SET {", ".join(updates)}
+            FROM users u
+            WHERE w.user_id = u.id
+              AND w.id = $1
+              AND u.telegram_id = $2
+              AND w.active = TRUE
+            RETURNING w.*, u.telegram_id, u.resy_token_encrypted
+        """
+
+        row = await Database.fetchrow(query, *params)
         if row:
             return Watch.model_validate(dict(row))
         return None

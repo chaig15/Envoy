@@ -2,7 +2,7 @@
 
 import pytest
 from datetime import date, time, datetime, timedelta
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 from envoy.db.models import Snipe
 from envoy.resy.mock_client import MockResyClient, create_mock_slots
@@ -205,14 +205,14 @@ class TestCalculateInterval:
     def test_alert_interval(self, sniper):
         """Snipes within 2 minutes should use alert interval."""
         assert sniper._calculate_interval(120) == 5  # Exactly 2 min
-        assert sniper._calculate_interval(60) == 5   # 1 min
-        assert sniper._calculate_interval(31) == 5   # Just over 30s
+        assert sniper._calculate_interval(60) == 5  # 1 min
+        assert sniper._calculate_interval(31) == 5  # Just over 30s
 
     def test_active_interval(self, sniper):
         """Snipes within 30 seconds should use active interval."""
-        assert sniper._calculate_interval(30) == 1   # Exactly 30s
-        assert sniper._calculate_interval(10) == 1   # 10s
-        assert sniper._calculate_interval(1) == 1    # 1s
+        assert sniper._calculate_interval(30) == 1  # Exactly 30s
+        assert sniper._calculate_interval(10) == 1  # 10s
+        assert sniper._calculate_interval(1) == 1  # 1s
 
 
 # ============================================================================
@@ -304,4 +304,3 @@ class TestSniperIntegration:
 
         # Should not process same snipe twice
         assert 1 in sniper._triggered_snipes
-

@@ -43,7 +43,9 @@ class Sniper:
         self.settings = get_settings()
         self._running = False
         self._task: Optional[asyncio.Task] = None
-        self._triggered_snipes: set[int] = set()  # Track triggered snipe IDs to avoid double-firing
+        self._triggered_snipes: set[int] = (
+            set()
+        )  # Track triggered snipe IDs to avoid double-firing
 
     def start(self) -> None:
         """Start the sniper scheduler."""

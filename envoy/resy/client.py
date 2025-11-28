@@ -8,14 +8,15 @@ from typing import Optional
 import aiohttp
 
 from envoy.config import get_settings
+
 from .models import (
-    ResyAuth,
-    ResyChallenge,
-    Venue,
-    TimeSlot,
     Availability,
     BookingDetails,
     BookingResult,
+    ResyAuth,
+    ResyChallenge,
+    TimeSlot,
+    Venue,
 )
 
 logger = logging.getLogger(__name__)
@@ -52,6 +53,9 @@ class ResyClient:
             "Content-Type": "application/x-www-form-urlencoded",
             "Origin": "https://resy.com",
             "Referer": "https://resy.com/",
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "application/json, text/plain, */*",
+            "Accept-Language": "en-US,en;q=0.9",
         }
         if self.auth_token:
             headers["X-Resy-Auth-Token"] = self.auth_token
@@ -408,4 +412,5 @@ class ResyClient:
             )
 
         # Complete the booking
+        return await self.book(details.book_token, payment_method_id)
         return await self.book(details.book_token, payment_method_id)

@@ -26,7 +26,7 @@ import argparse
 import asyncio
 import logging
 import sys
-from datetime import datetime, time
+from datetime import time
 from pathlib import Path
 from typing import Optional
 
@@ -191,13 +191,19 @@ class TestableSniper:
                                     result["message"] = (
                                         f"Booked {best_slot.time} at {snipe.venue_name}"
                                     )
-                                    result["reservation_id"] = book_result.reservation_id
-                                    logger.info(f"✓ BOOKING SUCCESS: {result['message']}")
+                                    result["reservation_id"] = (
+                                        book_result.reservation_id
+                                    )
+                                    logger.info(
+                                        f"✓ BOOKING SUCCESS: {result['message']}"
+                                    )
                                 else:
                                     result["message"] = (
                                         f"Booking failed: {book_result.error_message}"
                                     )
-                                    logger.error(f"✗ BOOKING FAILED: {result['message']}")
+                                    logger.error(
+                                        f"✗ BOOKING FAILED: {result['message']}"
+                                    )
 
                                 break
                             else:
@@ -289,9 +295,9 @@ async def list_pending_snipes():
             print("\nNo pending snipes found.\n")
             return
 
-        print(f"\n{'='*70}")
+        print(f"\n{'=' * 70}")
         print(f"{'ID':<6} {'Venue':<25} {'Target Date':<12} {'Release':<20}")
-        print(f"{'='*70}")
+        print(f"{'=' * 70}")
 
         for row in rows:
             snipe = Snipe.model_validate(dict(row))
@@ -301,7 +307,7 @@ async def list_pending_snipes():
                 f"{str(snipe.target_date):<12} {release_str:<20}"
             )
 
-        print(f"{'='*70}\n")
+        print(f"{'=' * 70}\n")
 
     finally:
         await Database.disconnect()
@@ -441,4 +447,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

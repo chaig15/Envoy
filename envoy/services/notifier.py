@@ -48,11 +48,12 @@ class Notifier:
         }
 
         # Format the message
+        table_type_info = f"\n🪑 {watch.table_type}" if watch.table_type else ""
         text_parts = [
             "🚨 **Table Available!**\n",
             f"🍽 **{watch.venue_name}**",
             f"📅 {watch.date.strftime('%A, %B %d')}",
-            f"👥 {watch.party_size} guests\n",
+            f"👥 {watch.party_size} guests{table_type_info}\n",
             "**Available times:**",
         ]
 

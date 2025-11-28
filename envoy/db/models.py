@@ -31,6 +31,7 @@ class Watch(BaseModel):
     party_size: int
     time_earliest: Optional[time] = None
     time_latest: Optional[time] = None
+    table_type: Optional[str] = None  # "Dining Room", "Bar", "Butter Chicken", etc.
     active: bool = True
     created_at: datetime
     notified_slots: list[str] = []
