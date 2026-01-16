@@ -21,6 +21,7 @@ ENV/
 .vscode/
 *.swp
 *.swo
+.claude/
 
 # Testing
 .pytest_cache/
