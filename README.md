@@ -247,6 +247,7 @@ uv run ruff format .
 - **Database**: PostgreSQL with asyncpg for persistence
 - **Background Services**: Monitor and Sniper services run continuously
 - **Encryption**: Fernet encryption for sensitive Resy tokens
+- **Monitoring**: Prometheus and Grafana for monitoring
 
 ## License
 
